@@ -93,3 +93,33 @@ enum JobItemStatus {
     }
   }
 }
+
+enum AssignmentStatus {
+  pending,
+  accepted,
+  rejected;
+
+  static AssignmentStatus fromString(String value) {
+    switch (value) {
+      case 'PENDING':
+        return AssignmentStatus.pending;
+      case 'ACCEPTED':
+        return AssignmentStatus.accepted;
+      case 'REJECTED':
+        return AssignmentStatus.rejected;
+      default:
+        throw ArgumentError('Unknown assignment status: $value');
+    }
+  }
+
+  String get value {
+    switch (this) {
+      case AssignmentStatus.pending:
+        return 'PENDING';
+      case AssignmentStatus.accepted:
+        return 'ACCEPTED';
+      case AssignmentStatus.rejected:
+        return 'REJECTED';
+    }
+  }
+}

@@ -5,6 +5,7 @@ import '../../../data/models/job.dart';
 import '../../../providers/admin_job_providers.dart';
 import '../../../providers/auth_providers.dart';
 import '../request/incoming_request_details_screen.dart';
+import '../assignment/assign_movers_screen.dart';
 
 class AdminDashboardScreen extends ConsumerWidget {
   const AdminDashboardScreen({super.key});
@@ -23,6 +24,17 @@ class AdminDashboardScreen extends ConsumerWidget {
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
         actions: [
+          IconButton(
+            tooltip: 'Assign Movers',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const AssignMoversScreen(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.assignment_ind_outlined),
+          ),
           IconButton(
             tooltip: 'Logout',
             onPressed: () => _confirmLogout(context, ref),
