@@ -6,6 +6,7 @@ import '../../../data/models/assignment.dart';
 import '../../../data/models/job.dart';
 import '../../../data/models/job_item.dart';
 import '../../../providers/mover_assignment_providers.dart';
+import '../active_job/start_job_controller.dart';
 
 class MoverAssignmentDetailsScreen extends ConsumerStatefulWidget {
   const MoverAssignmentDetailsScreen({required this.assignment, super.key});
@@ -255,6 +256,17 @@ class _MoverAssignmentDetailsScreenState
                   onReject: () {
                     _respond(job: job, accept: false);
                   },
+                )
+              else if (widget.assignment.status == AssignmentStatus.accepted)
+                Column(
+                  children: [
+                    _RespondedCard(status: widget.assignment.status),
+                    const SizedBox(height: 16),
+                    _StartStopJobButtons(
+                      assignmentId: widget.assignment.id,
+                      moverId: widget.assignment.moverId,
+                    ),
+                  ],
                 )
               else
                 _RespondedCard(status: widget.assignment.status),
@@ -560,7 +572,7 @@ class _ItemRow extends StatelessWidget {
           ),
         ),
         Text(
-          '× ${item.quantity}',
+          'Qty: ${item.quantity}',
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ],
@@ -599,6 +611,123 @@ class _ErrorView extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _StartStopJobButtons extends ConsumerStatefulWidget {
+  const _StartStopJobButtons({
+    required this.assignmentId,
+    required this.moverId,
+  });
+
+  final String assignmentId;
+  final String moverId;
+
+  @override
+  ConsumerState<_StartStopJobButtons> createState() =>
+      _StartStopJobButtonsState();
+}
+
+class _StartStopJobButtonsState extends ConsumerState<_StartStopJobButtons> {
+  bool running = false;
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRunningState();
+  }
+
+  Future<void> _loadRunningState() async {
+    final controller = ref.read(startJobControllerProvider);
+
+    final active = await controller.isActive(widget.assignmentId);
+
+    if (active) {
+      await controller.start(
+        assignmentId: widget.assignmentId,
+        moverId: widget.moverId,
+      );
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      running = active;
+      loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(double.infinity, 52),
+            backgroundColor: const Color(0xFF1E56A0),
+          ),
+          icon: const Icon(Icons.play_arrow_rounded),
+          label: const Text('Start Job & Enable Tracking'),
+
+          onPressed: running
+              ? null
+              : () async {
+                  await ref
+                      .read(startJobControllerProvider)
+                      .start(
+                        assignmentId: widget.assignmentId,
+                        moverId: widget.moverId,
+                      );
+
+                  setState(() {
+                    running = true;
+                  });
+
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Job started. Location tracking enabled.',
+                        ),
+                      ),
+                    );
+                  }
+                },
+        ),
+
+        const SizedBox(height: 12),
+
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(double.infinity, 52),
+            foregroundColor: Colors.red,
+          ),
+          icon: const Icon(Icons.stop_circle_outlined),
+          label: const Text('Clock Out & Stop Tracking'),
+
+          onPressed: running
+              ? () async {
+                  await ref
+                      .read(startJobControllerProvider)
+                      .stop(assignmentId: widget.assignmentId);
+
+                  setState(() {
+                    running = false;
+                  });
+
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Clocked out. Tracking stopped.'),
+                      ),
+                    );
+                  }
+                }
+              : null,
+        ),
+      ],
     );
   }
 }
