@@ -6,6 +6,7 @@ import '../../../data/models/assignment.dart';
 import '../../../data/models/job.dart';
 import '../../../data/models/job_item.dart';
 import '../../../providers/mover_assignment_providers.dart';
+import '../../../providers/job_item_provider.dart';
 import '../active_job/start_job_controller.dart';
 
 class MoverAssignmentDetailsScreen extends ConsumerStatefulWidget {
@@ -234,7 +235,7 @@ class _MoverAssignmentDetailsScreenState
 
                         return Column(
                           children: [
-                            _ItemRow(item: item),
+                            _ItemRow(item: item, jobId: job.id),
                             if (index < items.length - 1)
                               const Divider(height: 24),
                           ],
@@ -554,27 +555,68 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-class _ItemRow extends StatelessWidget {
-  const _ItemRow({required this.item});
+class _ItemRow extends ConsumerWidget {
+  const _ItemRow({required this.item, required this.jobId});
 
   final JobItem item;
+  final String jobId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final repository = ref.read(jobItemRepositoryProvider);
+
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         const Icon(Icons.inventory_2_outlined, color: Color(0xFF1E56A0)),
+
         const SizedBox(width: 12),
+
         Expanded(
-          child: Text(
-            item.name,
-            style: const TextStyle(fontWeight: FontWeight.w600),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.name,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+
+              Text('Qty: ${item.quantity}'),
+
+              Text(
+                'Status: ${item.status.value}',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
           ),
         ),
-        Text(
-          'Qty: ${item.quantity}',
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
+
+        if (item.status == JobItemStatus.pending)
+          FilledButton(
+            onPressed: () async {
+              await repository.updateStatus(
+                itemId: item.id,
+                status: 'COLLECTED',
+              );
+
+              ref.invalidate(moverAssignedJobItemsProvider(jobId));
+            },
+            child: const Text('Collect'),
+          )
+        else if (item.status == JobItemStatus.collected)
+          FilledButton(
+            onPressed: () async {
+              await repository.updateStatus(
+                itemId: item.id,
+                status: 'DELIVERED',
+              );
+
+              ref.invalidate(moverAssignedJobItemsProvider(jobId));
+            },
+            child: const Text('Deliver'),
+          )
+        else
+          const Icon(Icons.check_circle, color: Colors.green),
       ],
     );
   }

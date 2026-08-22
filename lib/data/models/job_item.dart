@@ -11,10 +11,8 @@ class JobItem {
 
   final int id;
   final String jobId;
-
   final String name;
   final int quantity;
-
   final JobItemStatus status;
 
   factory JobItem.fromMap(Map<String, dynamic> map) {
