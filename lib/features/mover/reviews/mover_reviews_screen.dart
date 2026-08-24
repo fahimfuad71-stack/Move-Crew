@@ -1,14 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../providers/review_providers.dart';
-import '../../../providers/auth_providers.dart';
+import '../../../core/widgets/sort_button.dart';
 import '../../../data/models/review.dart';
+import '../../../providers/auth_providers.dart';
+import '../../../providers/mover_assignment_providers.dart';
+import '../../../providers/review_providers.dart';
 
-class MoverReviewsScreen extends ConsumerWidget {
+class MoverReviewsScreen extends ConsumerStatefulWidget {
   const MoverReviewsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MoverReviewsScreen> createState() => _MoverReviewsScreenState();
+}
+
+class _MoverReviewsScreenState extends ConsumerState<MoverReviewsScreen> {
+  SortOrder _sortOrder = SortOrder.descending;
+
+  @override
+  Widget build(BuildContext context) {
     final user = ref.watch(currentAppUserProvider).value;
     if (user == null) return const Scaffold(body: Center(child: Text('Not logged in')));
 
@@ -20,31 +29,70 @@ class MoverReviewsScreen extends ConsumerWidget {
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
         title: const Text('My Ratings & Reviews'),
-      ),
-      body: reviewsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, s) => Center(child: Text('Error: $e')),
-        data: (reviews) {
-          if (reviews.isEmpty) {
-            return const Center(child: Text('No reviews yet.'));
-          }
-
-          final averageRating = reviews.map((r) => r.rating).reduce((a, b) => a + b) / reviews.length;
-
-          return Column(
-            children: [
-              _RatingSummary(averageRating: averageRating, totalReviews: reviews.length),
-              Expanded(
-                child: ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: reviews.length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) => _ReviewCard(review: reviews[index]),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: () => ref.invalidate(moverReviewsProvider(user.id)),
+          ),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                SortButton(
+                  currentOrder: _sortOrder,
+                  onChanged: (order) => setState(() => _sortOrder = order),
                 ),
-              ),
-            ],
-          );
+              ],
+            ),
+          ),
+        ),
+      ),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(moverReviewsProvider(user.id));
+          await ref.read(moverReviewsProvider(user.id).future);
         },
+        child: reviewsAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, s) => Center(child: Text('Error: $e')),
+          data: (reviews) {
+            if (reviews.isEmpty) {
+              return ListView(
+                children: const [
+                  SizedBox(height: 200),
+                  Center(child: Text('No reviews yet.')),
+                ],
+              );
+            }
+
+            final sorted = List<Review>.from(reviews);
+            if (_sortOrder == SortOrder.descending) {
+              sorted.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+            } else {
+              sorted.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+            }
+
+            final averageRating = reviews.map((r) => r.rating).reduce((a, b) => a + b) / reviews.length;
+
+            return Column(
+              children: [
+                _RatingSummary(averageRating: averageRating, totalReviews: reviews.length),
+                Expanded(
+                  child: ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: sorted.length,
+                    separatorBuilder: (context, index) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) => _ReviewCard(review: sorted[index]),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -89,13 +137,15 @@ class _RatingSummary extends StatelessWidget {
   }
 }
 
-class _ReviewCard extends StatelessWidget {
+class _ReviewCard extends ConsumerWidget {
   const _ReviewCard({required this.review});
 
   final Review review;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final jobAsync = ref.watch(moverAssignedJobProvider(review.jobId));
+
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -108,13 +158,23 @@ class _ReviewCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              children: List.generate(5, (index) {
-                return Icon(
-                  index < review.rating ? Icons.star : Icons.star_border,
-                  color: Colors.orange,
-                  size: 16,
-                );
-              }),
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: List.generate(5, (index) {
+                    return Icon(
+                      index < review.rating ? Icons.star : Icons.star_border,
+                      color: Colors.orange,
+                      size: 16,
+                    );
+                  }),
+                ),
+                jobAsync.when(
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, __) => const SizedBox.shrink(),
+                  data: (job) => Text(job.jobCode, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1E56A0))),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             if (review.comment != null && review.comment!.isNotEmpty)

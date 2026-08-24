@@ -1,4 +1,5 @@
 import '../../core/constants/status_enums.dart';
+import 'job.dart';
 
 class Assignment {
   const Assignment({
@@ -7,6 +8,7 @@ class Assignment {
     required this.moverId,
     required this.status,
     this.respondedAt,
+    this.job,
   });
 
   final String id;
@@ -14,9 +16,11 @@ class Assignment {
   final String moverId;
   final AssignmentStatus status;
   final DateTime? respondedAt;
+  final Job? job;
 
   factory Assignment.fromMap(Map<String, dynamic> map) {
     final respondedAtValue = map['responded_at'];
+    final jobMap = map['jobs'];
 
     return Assignment(
       id: map['id'] as String,
@@ -26,6 +30,7 @@ class Assignment {
       respondedAt: respondedAtValue == null
           ? null
           : DateTime.parse(respondedAtValue as String),
+      job: jobMap != null ? Job.fromMap(Map<String, dynamic>.from(jobMap)) : null,
     );
   }
 }

@@ -173,4 +173,14 @@ class MoverAssignmentRepository {
 
     return List<Map<String, dynamic>>.from(response);
   }
+
+  Future<List<Map<String, dynamic>>> getMoverTimeLogs(String moverId) async {
+    final response = await _client
+        .from('time_logs')
+        .select('*, assignments!inner(jobs!inner(job_code))')
+        .eq('mover_id', moverId)
+        .order('clock_in_at', ascending: false);
+
+    return List<Map<String, dynamic>>.from(response);
+  }
 }

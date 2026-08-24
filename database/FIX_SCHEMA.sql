@@ -17,6 +17,7 @@ SELECT
     COUNT(*) FILTER (WHERE status = 'ASSIGNED') as assigned_count,
     COUNT(*) FILTER (WHERE status = 'IN_PROGRESS') as in_progress_count,
     COUNT(*) FILTER (WHERE status = 'COMPLETED') as completed_count,
+    (SELECT COUNT(DISTINCT job_id) FROM public.assignments WHERE status = 'REJECTED' AND job_id IN (SELECT id FROM public.jobs WHERE status = 'ASSIGNED')) as rejected_count,
     COUNT(*) as total_jobs
 FROM public.jobs;
 
@@ -67,6 +68,74 @@ USING (
         WHERE id = assignments.job_id AND customer_id = auth.uid()
     )
 );
+
+-- 7. Add Admin Policies for Jobs and Items
+DROP POLICY IF EXISTS "Admins view all jobs" ON public.jobs;
+CREATE POLICY "Admins view all jobs" ON public.jobs FOR ALL USING (public.is_admin());
+
+DROP POLICY IF EXISTS "Admins view all items" ON public.job_items;
+CREATE POLICY "Admins view all items" ON public.job_items FOR ALL USING (public.is_admin());
+
+-- 8. Add Admin Policy for Time Logs
+DROP POLICY IF EXISTS "Admins view all time logs" ON public.time_logs;
+CREATE POLICY "Admins view all time logs" ON public.time_logs FOR SELECT USING (public.is_admin());
+
+-- 9. Add Admin Policy for Users Table
+DROP POLICY IF EXISTS "Admins view all users" ON public.users;
+CREATE POLICY "Admins view all users" ON public.users FOR SELECT USING (public.is_admin());
+
+-- 10. Ensure Mover/Customer consistency when roles change
+CREATE OR REPLACE FUNCTION public.sync_user_role_tables()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_employee_code TEXT;
+BEGIN
+    -- 1. Handle MOVER role
+    IF NEW.role = 'mover' THEN
+        -- Delete from customers if they were one
+        DELETE FROM public.customers WHERE id = NEW.id;
+
+        -- Insert into movers if not exists
+        IF NOT EXISTS (SELECT 1 FROM public.movers WHERE id = NEW.id) THEN
+            -- Generate a code like MOV-001
+            SELECT 'MOV-' || LPAD((COALESCE(MAX(SUBSTRING(employee_code FROM 5)::INT), 0) + 1)::TEXT, 3, '0')
+            INTO v_employee_code FROM public.movers;
+
+            INSERT INTO public.movers (id, employee_code) VALUES (NEW.id, v_employee_code);
+        END IF;
+
+    -- 2. Handle CUSTOMER role
+    ELSIF NEW.role = 'customer' THEN
+        -- Delete from movers if they were one
+        DELETE FROM public.movers WHERE id = NEW.id;
+
+        -- Insert into customers if not exists
+        IF NOT EXISTS (SELECT 1 FROM public.customers WHERE id = NEW.id) THEN
+            INSERT INTO public.customers (id) VALUES (NEW.id);
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS tr_sync_user_role_tables ON public.users;
+CREATE TRIGGER tr_sync_user_role_tables AFTER INSERT OR UPDATE OF role ON public.users
+FOR EACH ROW EXECUTE PROCEDURE public.sync_user_role_tables();
+
+-- 11. Migration: Fix existing users who have 'mover' role but no entry in movers table
+DO $$
+DECLARE
+    r RECORD;
+    v_employee_code TEXT;
+BEGIN
+    FOR r IN SELECT id FROM public.users WHERE role = 'mover' AND id NOT IN (SELECT id FROM public.movers) LOOP
+        SELECT 'MOV-' || LPAD((COALESCE(MAX(SUBSTRING(employee_code FROM 5)::INT), 0) + 1)::TEXT, 3, '0')
+        INTO v_employee_code FROM public.movers;
+
+        INSERT INTO public.movers (id, employee_code) VALUES (r.id, v_employee_code);
+    END LOOP;
+END $$;
 
 -- 4. Grant access to the view (if using specific roles)
 GRANT SELECT ON public.admin_job_stats TO authenticated;

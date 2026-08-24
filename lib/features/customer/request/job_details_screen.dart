@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/status_enums.dart';
+import '../../../core/widgets/job_status_chip.dart';
 import '../../../data/models/job.dart';
 import '../../../data/models/job_item.dart';
 import '../../../providers/review_providers.dart';
 import '../../../providers/customer_job_providers.dart';
 import '../../../data/models/review.dart';
+import '../../../providers/mover_assignment_providers.dart';
 import '../tracking/customer_live_map_screen.dart';
 
 class CustomerJobDetailsScreen extends ConsumerWidget {
@@ -279,7 +281,7 @@ class _HeaderCard extends StatelessWidget {
               ],
             ),
           ),
-          _StatusChip(status: job.status),
+          JobStatusChip(status: job.status),
         ],
       ),
     );
@@ -307,32 +309,95 @@ class _TrackMoverButton extends ConsumerWidget {
       data: (assignment) {
         if (assignment == null) return const SizedBox.shrink();
 
-        return SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => CustomerLiveMapScreen(
-                    assignmentId: assignment.id,
+        return Column(
+          children: [
+            _MoverInfoCard(moverId: assignment.moverId),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CustomerLiveMapScreen(
+                        assignmentId: assignment.id,
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.map_outlined),
+                label: const Text('Track Mover Live'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E56A0),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-              );
-            },
-            icon: const Icon(Icons.map_outlined),
-            label: const Text('Track Mover Live'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1E56A0),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
               ),
             ),
-          ),
+          ],
         );
       },
+    );
+  }
+}
+
+class _MoverInfoCard extends ConsumerWidget {
+  const _MoverInfoCard({required this.moverId});
+  final String moverId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final moverAsync = ref.watch(moverProfileProvider(moverId));
+
+    return moverAsync.when(
+      loading: () => const LinearProgressIndicator(),
+      error: (e, s) => const SizedBox.shrink(),
+      data: (mover) => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E5EA)),
+        ),
+        child: Row(
+          children: [
+            const CircleAvatar(
+              backgroundColor: Color(0xFFD7E6F7),
+              child: Icon(Icons.engineering_outlined, color: Color(0xFF1E56A0)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(mover['full_name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  Text('ID: ${mover['employee_code']}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.star, color: Colors.orange, size: 16),
+                    const SizedBox(width: 4),
+                    Text(
+                      mover['avg_rating'] > 0 ? (mover['avg_rating'] as double).toStringAsFixed(1) : 'New',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                Text('${mover['total_reviews']} reviews', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -461,6 +526,8 @@ class _SubmitReviewDialogState extends ConsumerState<_SubmitReviewDialog> {
       if (mounted) {
         Navigator.pop(context);
         ref.invalidate(jobReviewProvider(widget.job.id));
+        ref.invalidate(moverReviewsProvider(assignmentAsync.moverId));
+        ref.invalidate(moverProfileProvider(assignmentAsync.moverId));
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Thank you for your feedback!')),
         );
@@ -629,50 +696,6 @@ class _ItemRow extends StatelessWidget {
         _ItemStatusChip(status: item.status),
       ],
     );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status});
-
-  final JobStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    final config = _statusConfig(status);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: config.$2.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        config.$1,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: config.$2,
-        ),
-      ),
-    );
-  }
-
-  (String, Color) _statusConfig(JobStatus status) {
-    switch (status) {
-      case JobStatus.requested:
-        return ('Requested', const Color(0xFF9AA5B1));
-      case JobStatus.approved:
-        return ('Approved', const Color(0xFF2E9E5B));
-      case JobStatus.assigned:
-        return ('Assigned', const Color(0xFF1E7FCB));
-      case JobStatus.inProgress:
-        return ('In Progress', const Color(0xFF1E7FCB));
-      case JobStatus.completed:
-        return ('Completed', const Color(0xFF0F9D58));
-      case JobStatus.rejected:
-        return ('Rejected', const Color(0xFFD64545));
-    }
   }
 }
 

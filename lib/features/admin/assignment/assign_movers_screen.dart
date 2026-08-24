@@ -2,19 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/status_enums.dart';
+import '../../../core/widgets/job_status_chip.dart';
+import '../../../core/widgets/sort_button.dart';
 import '../../../data/models/admin_mover_assignment.dart';
 import '../../../data/models/job.dart';
 import '../../../data/models/mover_profile.dart';
 import '../../../providers/admin_assignment_providers.dart';
 import '../../../providers/admin_assignment_status_providers.dart';
+import '../management/admin_mover_detail_screen.dart';
 
-class AssignMoversScreen extends ConsumerWidget {
+class AssignMoversScreen extends ConsumerStatefulWidget {
   const AssignMoversScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final jobsAsync = ref.watch(approvedJobsProvider);
+  ConsumerState<AssignMoversScreen> createState() => _AssignMoversScreenState();
+}
 
+class _AssignMoversScreenState extends ConsumerState<AssignMoversScreen> {
+  SortOrder _sortOrder = SortOrder.descending;
+
+  @override
+  Widget build(BuildContext context) {
+    final jobsAsync = ref.watch(approvedJobsProvider);
     final moversAsync = ref.watch(availableMoversProvider);
 
     return Scaffold(
@@ -26,11 +35,25 @@ class AssignMoversScreen extends ConsumerWidget {
           'Assign Movers',
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                SortButton(
+                  currentOrder: _sortOrder,
+                  onChanged: (order) => setState(() => _sortOrder = order),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(approvedJobsProvider);
-
           ref.invalidate(availableMoversProvider);
 
           await Future.wait([
@@ -60,13 +83,20 @@ class AssignMoversScreen extends ConsumerWidget {
                   return const _EmptyView();
                 }
 
+                final sortedJobs = List<Job>.from(jobs);
+                if (_sortOrder == SortOrder.descending) {
+                  sortedJobs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+                } else {
+                  sortedJobs.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+                }
+
                 return ListView.separated(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-                  itemCount: jobs.length,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                  itemCount: sortedJobs.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
-                    return _JobAssignmentCard(job: jobs[index], movers: movers);
+                    return _JobAssignmentCard(job: sortedJobs[index], movers: movers);
                   },
                 );
               },
@@ -174,7 +204,21 @@ class _JobAssignmentCard extends ConsumerWidget {
                                 });
                               }
                             : null,
-                        title: Text(mover.fullName),
+                        title: Row(
+                          children: [
+                            Text(mover.fullName),
+                            const Spacer(),
+                            TextButton(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => AdminMoverDetailScreen(mover: mover)),
+                                );
+                              },
+                              child: const Text('View Profile', style: TextStyle(fontSize: 12)),
+                            ),
+                          ],
+                        ),
                         subtitle: Text(
                           '${mover.employeeCode}$phone\n'
                           'Status: $statusText',
@@ -332,7 +376,7 @@ class _JobAssignmentCard extends ConsumerWidget {
                     ),
                   ),
                 ),
-                _JobStatusChip(status: job.status.value),
+                JobStatusChip(status: job.status),
               ],
             ),
 
@@ -500,111 +544,53 @@ class _MoverStatusRow extends StatelessWidget {
         color: const Color(0xFFF7F8FA),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Row(
-        children: [
-          const CircleAvatar(
-            radius: 18,
-            backgroundColor: Color(0xFFD7E6F7),
-            child: Icon(
-              Icons.person_outline_rounded,
-              size: 20,
-              color: Color(0xFF1E56A0),
+      child: InkWell(
+        onTap: () {
+          // We need to convert AdminMoverAssignment to MoverProfile
+          final mover = MoverProfile(
+            id: assignment.moverId,
+            employeeCode: assignment.employeeCode,
+            fullName: assignment.fullName,
+            phone: assignment.phone,
+          );
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => AdminMoverDetailScreen(mover: mover)),
+          );
+        },
+        child: Row(
+          children: [
+            const CircleAvatar(
+              radius: 18,
+              backgroundColor: Color(0xFFD7E6F7),
+              child: Icon(
+                Icons.person_outline_rounded,
+                size: 20,
+                color: Color(0xFF1E56A0),
+              ),
             ),
-          ),
-
-          const SizedBox(width: 10),
-
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  assignment.fullName,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  assignment.employeeCode,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF5C6470),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    assignment.fullName,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 2),
+                  Text(
+                    assignment.employeeCode,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF5C6470),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-
-          _AssignmentStatusChip(status: assignment.status),
-        ],
-      ),
-    );
-  }
-}
-
-class _AssignmentStatusChip extends StatelessWidget {
-  const _AssignmentStatusChip({required this.status});
-
-  final AssignmentStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    late final Color color;
-
-    switch (status) {
-      case AssignmentStatus.pending:
-        color = const Color(0xFF9AA5B1);
-        break;
-
-      case AssignmentStatus.accepted:
-        color = const Color(0xFF2E9E5B);
-        break;
-
-      case AssignmentStatus.rejected:
-        color = const Color(0xFFD64545);
-        break;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        status.value,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: color,
-        ),
-      ),
-    );
-  }
-}
-
-class _JobStatusChip extends StatelessWidget {
-  const _JobStatusChip({required this.status});
-
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    final assigned = status == 'ASSIGNED';
-
-    final color = assigned ? const Color(0xFF1E7FCB) : const Color(0xFF2E9E5B);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        status,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w600,
-          fontSize: 12,
+            AssignmentStatusChip(status: assignment.status),
+          ],
         ),
       ),
     );

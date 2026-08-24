@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/status_enums.dart';
+import '../../../core/widgets/job_status_chip.dart';
 import '../../../data/models/assignment.dart';
 import '../../../providers/auth_providers.dart';
 import '../../../providers/mover_assignment_providers.dart';
@@ -288,46 +289,25 @@ class _AssignmentStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    String label;
-    Color color;
-
     if (assignmentStatus == AssignmentStatus.accepted &&
         jobStatus == JobStatus.inProgress) {
-      label = 'In Progress';
-      color = const Color(0xFF1E7FCB);
+      return const JobStatusChip(status: JobStatus.inProgress);
     } else if (assignmentStatus == AssignmentStatus.accepted &&
         jobStatus == JobStatus.completed) {
-      label = 'Completed';
-      color = const Color(0xFF0F9D58);
+      return const JobStatusChip(status: JobStatus.completed);
     } else {
-      label = switch (assignmentStatus) {
-        AssignmentStatus.pending => 'Pending',
-        AssignmentStatus.accepted => 'Accepted',
-        AssignmentStatus.rejected => 'Rejected',
-      };
-
-      color = switch (assignmentStatus) {
-        AssignmentStatus.pending => const Color(0xFF9AA5B1),
-        AssignmentStatus.accepted => const Color(0xFF2E9E5B),
-        AssignmentStatus.rejected => const Color(0xFFD64545),
-      };
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (assignmentStatus == AssignmentStatus.rejected)
+            const Padding(
+              padding: EdgeInsets.only(right: 8),
+              child: AssignmentStatusChip(status: AssignmentStatus.rejected),
+            ),
+          JobStatusChip(status: jobStatus),
+        ],
+      );
     }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: color,
-        ),
-      ),
-    );
   }
 }
 

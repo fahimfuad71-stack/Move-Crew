@@ -236,7 +236,7 @@ class _MoverAssignmentDetailsScreenState
 
                         return Column(
                           children: [
-                            _ItemRow(item: item, jobId: job.id),
+                            _ItemRow(item: item, jobId: job.id, assignmentStatus: widget.assignment.status),
                             if (index < items.length - 1)
                               const Divider(height: 24),
                           ],
@@ -579,14 +579,16 @@ class _InfoRow extends StatelessWidget {
 }
 
 class _ItemRow extends ConsumerWidget {
-  const _ItemRow({required this.item, required this.jobId});
+  const _ItemRow({required this.item, required this.jobId, required this.assignmentStatus});
 
   final JobItem item;
   final String jobId;
+  final AssignmentStatus assignmentStatus;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final repository = ref.read(jobItemRepositoryProvider);
+    final isAccepted = assignmentStatus == AssignmentStatus.accepted;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -614,32 +616,32 @@ class _ItemRow extends ConsumerWidget {
           ),
         ),
 
-        if (item.status == JobItemStatus.pending)
-          FilledButton(
-            onPressed: () async {
-              await repository.updateStatus(
-                itemId: item.id,
-                status: 'COLLECTED',
-              );
+        if (isAccepted) ...[
+          if (item.status == JobItemStatus.pending)
+            FilledButton(
+              onPressed: () async {
+                await repository.updateStatus(
+                  itemId: item.id,
+                  status: 'COLLECTED',
+                );
 
-              ref.invalidate(moverAssignedJobItemsProvider(jobId));
-            },
-            child: const Text('Collect'),
-          )
-        else if (item.status == JobItemStatus.collected)
-          FilledButton(
-            onPressed: () async {
-              await repository.updateStatus(
-                itemId: item.id,
-                status: 'DELIVERED',
-              );
+                ref.invalidate(moverAssignedJobItemsProvider(jobId));
+              },
+              child: const Text('Collect'),
+            )
+          else if (item.status == JobItemStatus.collected)
+            FilledButton(
+              onPressed: () async {
+                await repository.updateStatus(
+                  itemId: item.id,
+                  status: 'DELIVERED',
+                );
 
-              ref.invalidate(moverAssignedJobItemsProvider(jobId));
-            },
-            child: const Text('Deliver'),
-          )
-        else
-          const Icon(Icons.check_circle, color: Colors.green),
+                ref.invalidate(moverAssignedJobItemsProvider(jobId));
+              },
+              child: const Text('Deliver'),
+            ),
+        ],
       ],
     );
   }

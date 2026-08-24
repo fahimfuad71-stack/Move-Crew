@@ -4,6 +4,7 @@ import '../../core/constants/status_enums.dart';
 import '../models/job.dart';
 import '../models/job_item.dart';
 import '../models/user.dart';
+import '../models/assignment.dart';
 
 class AdminReviewResult {
   const AdminReviewResult({
@@ -33,6 +34,21 @@ class AdminJobRepository {
         .eq('status', 'REQUESTED')
         .order('created_at', ascending: false);
 
+    return response.map((row) => Job.fromMap(row)).toList();
+  }
+
+  // -------------------------------------------------------
+  // GET ALL JOBS (OPTIONAL STATUS FILTER)
+  // -------------------------------------------------------
+
+  Future<List<Job>> getAllJobs({JobStatus? status}) async {
+    var query = _client.from('jobs').select();
+
+    if (status != null) {
+      query = query.eq('status', status.value);
+    }
+
+    final response = await query.order('created_at', ascending: false);
     return response.map((row) => Job.fromMap(row)).toList();
   }
 
@@ -79,7 +95,51 @@ class AdminJobRepository {
   }
 
   // -------------------------------------------------------
-  // APPROVE
+  // GET ALL CUSTOMERS
+  // -------------------------------------------------------
+
+  Future<List<AppUser>> getAllCustomers() async {
+    final response = await _client
+        .from('users')
+        .select()
+        .eq('role', 'customer')
+        .order('full_name', ascending: true);
+
+    return response.map((row) => AppUser.fromJson(row)).toList();
+  }
+
+  // -------------------------------------------------------
+  // MOVER MANAGEMENT DATA
+  // -------------------------------------------------------
+
+  Future<List<Assignment>> getMoverWorkHistory(String moverId) async {
+    final response = await _client
+        .from('assignments')
+        .select('*, jobs!inner(*)')
+        .eq('mover_id', moverId);
+
+    return response.map((row) => Assignment.fromMap(row)).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> getMoverTimeLogs(String moverId) async {
+    final response = await _client
+        .from('time_logs')
+        .select('*, assignments(jobs(job_code))')
+        .eq('mover_id', moverId)
+        .order('clock_in_at', ascending: false);
+
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  Future<List<Job>> getCustomerJobHistory(String customerId) async {
+    final response = await _client
+        .from('jobs')
+        .select()
+        .eq('customer_id', customerId)
+        .order('created_at', ascending: false);
+
+    return response.map((row) => Job.fromMap(row)).toList();
+  }
   // -------------------------------------------------------
 
   Future<AdminReviewResult> approveRequest(String jobId) {
@@ -141,12 +201,13 @@ class AdminJobRepository {
         .single();
 
     return {
-      'requested': response['requested_count'] as int,
-      'approved': response['approved_count'] as int,
-      'assigned': response['assigned_count'] as int,
-      'inProgress': response['in_progress_count'] as int,
-      'completed': response['completed_count'] as int,
-      'total': response['total_jobs'] as int,
+      'requested': (response['requested_count'] ?? 0) as int,
+      'approved': (response['approved_count'] ?? 0) as int,
+      'assigned': (response['assigned_count'] ?? 0) as int,
+      'inProgress': (response['in_progress_count'] ?? 0) as int,
+      'completed': (response['completed_count'] ?? 0) as int,
+      'rejected': (response['rejected_count'] ?? 0) as int,
+      'total': (response['total_jobs'] ?? 0) as int,
     };
   }
 }

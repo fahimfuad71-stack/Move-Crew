@@ -1,18 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/constants/status_enums.dart';
+import '../../../core/widgets/sort_button.dart';
 import '../../../data/models/job.dart';
 import '../../../providers/admin_job_providers.dart';
 import '../../../providers/auth_providers.dart';
 import '../request/incoming_request_details_screen.dart';
 import '../assignment/assign_movers_screen.dart';
 import '../monitoring/admin_monitoring_screen.dart';
+import 'admin_job_list_screen.dart';
+import '../management/admin_mover_list_screen.dart';
+import '../management/admin_customer_list_screen.dart';
 
-class AdminDashboardScreen extends ConsumerWidget {
+class AdminDashboardScreen extends ConsumerStatefulWidget {
   const AdminDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
+}
+
+class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
+  SortOrder _sortOrder = SortOrder.descending;
+
+  @override
+  Widget build(BuildContext context) {
     final requestsAsync = ref.watch(incomingAdminRequestsProvider);
     final statsAsync = ref.watch(adminJobStatsProvider);
 
@@ -36,17 +48,6 @@ class AdminDashboardScreen extends ConsumerWidget {
             icon: const Icon(Icons.monitor_heart_outlined),
           ),
           IconButton(
-            tooltip: 'Assign Movers',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const AssignMoversScreen(),
-                ),
-              );
-            },
-            icon: const Icon(Icons.assignment_ind_outlined),
-          ),
-          IconButton(
             tooltip: 'Logout',
             onPressed: () => _confirmLogout(context, ref),
             icon: const Icon(Icons.logout_rounded),
@@ -54,6 +55,7 @@ class AdminDashboardScreen extends ConsumerWidget {
           const SizedBox(width: 8),
         ],
       ),
+      drawer: const _AdminDrawer(),
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(incomingAdminRequestsProvider);
@@ -80,12 +82,21 @@ class AdminDashboardScreen extends ConsumerWidget {
                 data: (stats) => _StatsSection(stats: stats),
               ),
             ),
-            const SliverToBoxAdapter(
+            SliverToBoxAdapter(
               child: Padding(
-                padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
-                child: Text(
-                  'Incoming Requests',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Incoming Requests',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    SortButton(
+                      currentOrder: _sortOrder,
+                      onChanged: (order) => setState(() => _sortOrder = order),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -106,6 +117,13 @@ class AdminDashboardScreen extends ConsumerWidget {
                   return const SliverFillRemaining(child: _EmptyView());
                 }
 
+                final sortedRequests = List<Job>.from(requests);
+                if (_sortOrder == SortOrder.descending) {
+                  sortedRequests.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+                } else {
+                  sortedRequests.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+                }
+
                 return SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   sliver: SliverList(
@@ -113,10 +131,10 @@ class AdminDashboardScreen extends ConsumerWidget {
                       (context, index) {
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 12),
-                          child: _RequestCard(job: requests[index]),
+                          child: _RequestCard(job: sortedRequests[index]),
                         );
                       },
-                      childCount: requests.length,
+                      childCount: sortedRequests.length,
                     ),
                   ),
                 );
@@ -180,12 +198,14 @@ class _StatsSection extends StatelessWidget {
                 label: 'Requested',
                 count: stats['requested'] ?? 0,
                 color: const Color(0xFF9AA5B1),
+                onTap: () => _navigateToJobs(context, 'REQUESTED'),
               ),
               const SizedBox(width: 12),
               _StatCard(
                 label: 'Approved',
                 count: stats['approved'] ?? 0,
                 color: const Color(0xFF2E9E5B),
+                onTap: () => _navigateToJobs(context, 'APPROVED'),
               ),
             ],
           ),
@@ -195,17 +215,53 @@ class _StatsSection extends StatelessWidget {
               _StatCard(
                 label: 'Assigned',
                 count: stats['assigned'] ?? 0,
+                rejectedCount: stats['rejected'] ?? 0,
                 color: const Color(0xFF1E7FCB),
+                onTap: () => _navigateToJobs(context, 'ASSIGNED'),
               ),
               const SizedBox(width: 12),
               _StatCard(
                 label: 'Completed',
                 count: stats['completed'] ?? 0,
                 color: const Color(0xFF0F9D58),
+                onTap: () => _navigateToJobs(context, 'COMPLETED'),
               ),
             ],
           ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF1E56A0),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const AssignMoversScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.assignment_ind_outlined),
+              label: const Text(
+                'ASSIGN MOVERS',
+                style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1),
+              ),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  void _navigateToJobs(BuildContext context, String status) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AdminJobListScreen(status: JobStatus.fromString(status)),
       ),
     );
   }
@@ -216,39 +272,65 @@ class _StatCard extends StatelessWidget {
     required this.label,
     required this.count,
     required this.color,
+    this.rejectedCount,
+    this.onTap,
   });
 
   final String label;
   final int count;
   final Color color;
+  final int? rejectedCount;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE2E5EA)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(fontSize: 14, color: Color(0xFF5C6470)),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE2E5EA)),
             ),
-            const SizedBox(height: 4),
-            Text(
-              count.toString(),
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(fontSize: 14, color: Color(0xFF5C6470)),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Text(
+                      count.toString(),
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                      ),
+                    ),
+                    if (rejectedCount != null && rejectedCount! > 0) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        '($rejectedCount)',
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -454,6 +536,71 @@ class _EmptyView extends StatelessWidget {
           textAlign: TextAlign.center,
         ),
       ],
+    );
+  }
+}
+
+class _AdminDrawer extends ConsumerWidget {
+  const _AdminDrawer();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(currentAppUserProvider).value;
+
+    return Drawer(
+      child: Column(
+        children: [
+          UserAccountsDrawerHeader(
+            decoration: const BoxDecoration(color: Color(0xFF1E56A0)),
+            accountName: Text(user?.fullName ?? 'Admin'),
+            accountEmail: const Text('MoveCrew Administrator'),
+            currentAccountPicture: const CircleAvatar(
+              backgroundColor: Colors.white,
+              child: Icon(Icons.admin_panel_settings, color: Color(0xFF1E56A0), size: 40),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.dashboard_outlined),
+            title: const Text('Dashboard'),
+            onTap: () => Navigator.pop(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.engineering_outlined),
+            title: const Text('Mover Management'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminMoverListScreen()));
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.people_outline),
+            title: const Text('Customer Management'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminCustomerListScreen()));
+            },
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.history_rounded),
+            title: const Text('All Jobs Archive'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminJobListScreen()));
+            },
+          ),
+          const Spacer(),
+          ListTile(
+            leading: const Icon(Icons.logout_rounded, color: Colors.red),
+            title: const Text('Sign Out', style: TextStyle(color: Colors.red)),
+            onTap: () {
+              Navigator.pop(context);
+              // ref.read(authRepositoryProvider).signOut(); // Handled by _confirmLogout but could be here too
+            },
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
     );
   }
 }

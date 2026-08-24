@@ -25,7 +25,8 @@ enum JobStatus {
   assigned,
   inProgress,
   completed,
-  rejected;
+  rejected,
+  cancelled;
 
   static JobStatus fromString(String value) {
     switch (value) {
@@ -41,6 +42,8 @@ enum JobStatus {
         return JobStatus.completed;
       case 'REJECTED':
         return JobStatus.rejected;
+      case 'CANCELLED':
+        return JobStatus.cancelled;
       default:
         throw ArgumentError('Unknown job status: $value');
     }
@@ -60,6 +63,8 @@ enum JobStatus {
         return 'COMPLETED';
       case JobStatus.rejected:
         return 'REJECTED';
+      case JobStatus.cancelled:
+        return 'CANCELLED';
     }
   }
 }

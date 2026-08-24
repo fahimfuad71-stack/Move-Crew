@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/status_enums.dart';
+import '../../../core/widgets/job_status_chip.dart';
 import '../../../data/models/job.dart';
 import '../../../data/models/job_item.dart';
 import '../../../providers/admin_job_providers.dart';
@@ -465,54 +466,10 @@ class _HeaderCard extends StatelessWidget {
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
             ),
           ),
-          _StatusChip(status: job.status),
+          JobStatusChip(status: job.status),
         ],
       ),
     );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status});
-
-  final JobStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    final config = _statusConfig(status);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: config.$2.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        config.$1,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: config.$2,
-        ),
-      ),
-    );
-  }
-
-  (String, Color) _statusConfig(JobStatus status) {
-    switch (status) {
-      case JobStatus.requested:
-        return ('Requested', const Color(0xFF9AA5B1));
-      case JobStatus.approved:
-        return ('Approved', const Color(0xFF2E9E5B));
-      case JobStatus.assigned:
-        return ('Assigned', const Color(0xFF1E7FCB));
-      case JobStatus.inProgress:
-        return ('In Progress', const Color(0xFF1E7FCB));
-      case JobStatus.completed:
-        return ('Completed', const Color(0xFF0F9D58));
-      case JobStatus.rejected:
-        return ('Rejected', const Color(0xFFD64545));
-    }
   }
 }
 
