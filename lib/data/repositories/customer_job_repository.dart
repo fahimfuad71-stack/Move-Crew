@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/assignment.dart';
 import '../models/job.dart';
 import '../models/job_item.dart';
 
@@ -112,6 +113,24 @@ class CustomerJobRepository {
         .order('id', ascending: true);
 
     return response.map((row) => JobItem.fromMap(row)).toList();
+  }
+
+  // -------------------------------------------------------
+  // GET ASSIGNMENT FOR JOB
+  // -------------------------------------------------------
+
+  Future<Assignment?> getJobAssignment(String jobId) async {
+    final response = await _client
+        .from('assignments')
+        .select()
+        .eq('job_id', jobId)
+        .order('responded_at', ascending: false)
+        .limit(1)
+        .maybeSingle();
+
+    if (response == null) return null;
+
+    return Assignment.fromMap(response);
   }
 
   // -------------------------------------------------------

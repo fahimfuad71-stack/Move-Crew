@@ -30,14 +30,14 @@ class LocationRepository {
     return MoverLocation.fromMap(response);
   }
 
-  Stream<MoverLocation> streamLocation(String assignmentId) {
+  Stream<MoverLocation?> streamLocation(String assignmentId) {
     return _client
         .from('mover_locations')
         .stream(primaryKey: ['id'])
         .eq('assignment_id', assignmentId)
         .map((data) {
           if (data.isEmpty) {
-            throw Exception('No location available');
+            return null;
           }
 
           final latest = data.last;

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../active_job/mover_live_map_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/status_enums.dart';
@@ -266,6 +267,13 @@ class _MoverAssignmentDetailsScreenState
                     _StartStopJobButtons(
                       assignmentId: widget.assignment.id,
                       moverId: widget.assignment.moverId,
+                      jobId: job.id,
+                      jobStatus: job.status,
+                    ),
+                    const SizedBox(height: 16),
+                    _CompleteJobButton(
+                      job: job,
+                      assignmentId: widget.assignment.id,
                     ),
                   ],
                 )
@@ -432,13 +440,11 @@ class _HeaderCard extends StatelessWidget {
                   ),
                 ),
               ),
-              _AssignmentStatusChip(status: assignment.status),
+              _AssignmentStatusChip(
+                assignmentStatus: assignment.status,
+                jobStatus: job.status,
+              ),
             ],
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Job status: ASSIGNED',
-            style: TextStyle(fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -447,23 +453,40 @@ class _HeaderCard extends StatelessWidget {
 }
 
 class _AssignmentStatusChip extends StatelessWidget {
-  const _AssignmentStatusChip({required this.status});
+  const _AssignmentStatusChip({
+    required this.assignmentStatus,
+    required this.jobStatus,
+  });
 
-  final AssignmentStatus status;
+  final AssignmentStatus assignmentStatus;
+  final JobStatus jobStatus;
 
   @override
   Widget build(BuildContext context) {
-    final label = switch (status) {
-      AssignmentStatus.pending => 'Pending',
-      AssignmentStatus.accepted => 'Accepted',
-      AssignmentStatus.rejected => 'Rejected',
-    };
+    String label;
+    Color color;
 
-    final color = switch (status) {
-      AssignmentStatus.pending => const Color(0xFF9AA5B1),
-      AssignmentStatus.accepted => const Color(0xFF2E9E5B),
-      AssignmentStatus.rejected => const Color(0xFFD64545),
-    };
+    if (assignmentStatus == AssignmentStatus.accepted &&
+        jobStatus == JobStatus.inProgress) {
+      label = 'In Progress';
+      color = const Color(0xFF1E7FCB);
+    } else if (assignmentStatus == AssignmentStatus.accepted &&
+        jobStatus == JobStatus.completed) {
+      label = 'Completed';
+      color = const Color(0xFF0F9D58);
+    } else {
+      label = switch (assignmentStatus) {
+        AssignmentStatus.pending => 'Pending',
+        AssignmentStatus.accepted => 'Accepted',
+        AssignmentStatus.rejected => 'Rejected',
+      };
+
+      color = switch (assignmentStatus) {
+        AssignmentStatus.pending => const Color(0xFF9AA5B1),
+        AssignmentStatus.accepted => const Color(0xFF2E9E5B),
+        AssignmentStatus.rejected => const Color(0xFFD64545),
+      };
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -661,10 +684,14 @@ class _StartStopJobButtons extends ConsumerStatefulWidget {
   const _StartStopJobButtons({
     required this.assignmentId,
     required this.moverId,
+    required this.jobId,
+    required this.jobStatus,
   });
 
   final String assignmentId;
   final String moverId;
+  final String jobId;
+  final JobStatus jobStatus;
 
   @override
   ConsumerState<_StartStopJobButtons> createState() =>
@@ -703,6 +730,11 @@ class _StartStopJobButtonsState extends ConsumerState<_StartStopJobButtons> {
 
   @override
   Widget build(BuildContext context) {
+    // Hide buttons if job is already completed
+    if (widget.jobStatus == JobStatus.completed) {
+      return const SizedBox.shrink();
+    }
+
     return Column(
       children: [
         FilledButton.icon(
@@ -723,6 +755,9 @@ class _StartStopJobButtonsState extends ConsumerState<_StartStopJobButtons> {
                         moverId: widget.moverId,
                       );
 
+                  // Refresh job data to show "In Progress"
+                  ref.invalidate(moverAssignedJobProvider(widget.jobId));
+
                   setState(() {
                     running = true;
                   });
@@ -741,6 +776,27 @@ class _StartStopJobButtonsState extends ConsumerState<_StartStopJobButtons> {
 
         const SizedBox(height: 12),
 
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(double.infinity, 52),
+            backgroundColor: const Color(0xFF6C63FF),
+          ),
+          icon: const Icon(Icons.map_outlined),
+          label: const Text('Open Live Map'),
+          onPressed: running
+              ? () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          MoverLiveMapScreen(assignmentId: widget.assignmentId),
+                    ),
+                  );
+                }
+              : null,
+        ),
+
+        const SizedBox(height: 12),
         OutlinedButton.icon(
           style: OutlinedButton.styleFrom(
             minimumSize: const Size(double.infinity, 52),
@@ -754,6 +810,9 @@ class _StartStopJobButtonsState extends ConsumerState<_StartStopJobButtons> {
                   await ref
                       .read(startJobControllerProvider)
                       .stop(assignmentId: widget.assignmentId);
+
+                  // Refresh job data
+                  ref.invalidate(moverAssignedJobProvider(widget.jobId));
 
                   setState(() {
                     running = false;
@@ -770,6 +829,140 @@ class _StartStopJobButtonsState extends ConsumerState<_StartStopJobButtons> {
               : null,
         ),
       ],
+    );
+  }
+}
+
+class _CompleteJobButton extends ConsumerStatefulWidget {
+  const _CompleteJobButton({required this.job, required this.assignmentId});
+
+  final Job job;
+  final String assignmentId;
+
+  @override
+  ConsumerState<_CompleteJobButton> createState() => _CompleteJobButtonState();
+}
+
+class _CompleteJobButtonState extends ConsumerState<_CompleteJobButton> {
+  bool _completing = false;
+
+  Future<void> _completeJob() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Complete Job?'),
+        content: Text(
+          'Are you sure you want to mark ${widget.job.jobCode} as completed?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Complete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _completing = true);
+
+    try {
+      // Auto Clock-out if running
+      final controller = ref.read(startJobControllerProvider);
+      final active = await controller.isActive(widget.assignmentId);
+      
+      if (active) {
+        await controller.stop(assignmentId: widget.assignmentId);
+      }
+
+      await ref
+          .read(moverAssignmentRepositoryProvider)
+          .completeJob(widget.job.id);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Job marked as completed.')),
+        );
+        ref.invalidate(moverAssignedJobProvider(widget.job.id));
+        ref.invalidate(myMoverAssignmentsProvider);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _completing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.job.status == JobStatus.completed) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: const Color(0xFF2E9E5B).withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF2E9E5B)),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.check_circle, color: Color(0xFF2E9E5B)),
+            SizedBox(width: 8),
+            Text(
+              'Job Completed',
+              style: TextStyle(
+                color: Color(0xFF2E9E5B),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final itemsAsync = ref.watch(moverAssignedJobItemsProvider(widget.job.id));
+
+    return itemsAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (e, s) => const SizedBox.shrink(),
+      data: (items) {
+        final allDelivered = items.isNotEmpty &&
+            items.every((item) => item.status == JobItemStatus.delivered);
+
+        return FilledButton.icon(
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(double.infinity, 56),
+            backgroundColor: const Color(0xFF2E9E5B),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          onPressed: (allDelivered && !_completing) ? _completeJob : null,
+          icon: _completing
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+              : const Icon(Icons.verified_rounded),
+          label: Text(
+            allDelivered ? 'Complete Job' : 'Deliver all items to complete',
+          ),
+        );
+      },
     );
   }
 }

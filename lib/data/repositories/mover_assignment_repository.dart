@@ -37,8 +37,9 @@ class MoverAssignmentRepository {
 
     final response = await _client
         .from('assignments')
-        .select()
-        .eq('mover_id', userId);
+        .select('*, jobs!inner(*)')
+        .eq('mover_id', userId)
+        .neq('jobs.status', 'COMPLETED');
 
     return response.map((row) => Assignment.fromMap(row)).toList();
   }
@@ -131,5 +132,45 @@ class MoverAssignmentRepository {
       newStatus: AssignmentStatus.fromString(row['new_status'] as String),
       respondedAt: DateTime.parse(row['responded_at'] as String),
     );
+  }
+
+  // -------------------------------------------------------
+  // COMPLETE JOB
+  // -------------------------------------------------------
+
+  Future<void> completeJob(String jobId) async {
+    await _client.rpc('complete_job', params: {'p_job_id': jobId});
+  }
+
+  // -------------------------------------------------------
+  // GET COMPLETED ASSIGNMENTS
+  // -------------------------------------------------------
+
+  Future<List<Assignment>> getWorkHistory() async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw StateError('Authentication required.');
+
+    final response = await _client
+        .from('assignments')
+        .select('*, jobs!inner(*)')
+        .eq('mover_id', userId)
+        .eq('status', 'ACCEPTED')
+        .eq('jobs.status', 'COMPLETED');
+
+    return response.map((row) => Assignment.fromMap(row)).toList();
+  }
+
+  // -------------------------------------------------------
+  // GET TIME LOGS FOR ASSIGNMENT
+  // -------------------------------------------------------
+
+  Future<List<Map<String, dynamic>>> getJobTimeLogs(String assignmentId) async {
+    final response = await _client
+        .from('time_logs')
+        .select()
+        .eq('assignment_id', assignmentId)
+        .order('clock_in_at', ascending: true);
+
+    return List<Map<String, dynamic>>.from(response);
   }
 }

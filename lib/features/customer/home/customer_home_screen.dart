@@ -15,61 +15,93 @@ class CustomerHomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final jobsAsync = ref.watch(myJobsProvider);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-        title: const Text(
-          'My Requests',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Logout',
-            onPressed: () => _confirmLogout(context, ref),
-            icon: const Icon(Icons.logout_rounded),
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF7F8FA),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+          title: const Text(
+            'MoveCrew Customer',
+            style: TextStyle(fontWeight: FontWeight.w600),
           ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(myJobsProvider);
-
-          await ref.read(myJobsProvider.future);
-        },
-        child: jobsAsync.when(
-          loading: () => const _LoadingView(),
-
-          error: (error, stackTrace) => _ErrorView(
-            message: error.toString(),
-            onRetry: () {
-              ref.invalidate(myJobsProvider);
-            },
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: 'Active Requests'),
+              Tab(text: 'Move History'),
+            ],
           ),
-
-          data: (jobs) {
-            if (jobs.isEmpty) {
-              return const _EmptyView();
-            }
-
-            return _JobList(jobs: jobs);
-          },
-        ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF1E56A0),
-        foregroundColor: Colors.white,
-        onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => const CreateRequestScreen(),
+          actions: [
+            IconButton(
+              tooltip: 'Logout',
+              onPressed: () => _confirmLogout(context, ref),
+              icon: const Icon(Icons.logout_rounded),
             ),
-          );
-        },
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('New Request'),
+            const SizedBox(width: 8),
+          ],
+        ),
+        body: TabBarView(
+          children: [
+            RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(myJobsProvider);
+                await ref.read(myJobsProvider.future);
+              },
+              child: jobsAsync.when(
+                loading: () => const _LoadingView(),
+                error: (error, stackTrace) => _ErrorView(
+                  message: error.toString(),
+                  onRetry: () {
+                    ref.invalidate(myJobsProvider);
+                  },
+                ),
+                data: (jobs) {
+                  final activeJobs = jobs.where((j) => j.status != JobStatus.completed && j.status != JobStatus.rejected).toList();
+                  if (activeJobs.isEmpty) {
+                    return const _EmptyView();
+                  }
+                  return _JobList(jobs: activeJobs);
+                },
+              ),
+            ),
+            RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(myJobsProvider);
+                await ref.read(myJobsProvider.future);
+              },
+              child: jobsAsync.when(
+                loading: () => const _LoadingView(),
+                error: (error, stackTrace) => _ErrorView(
+                  message: error.toString(),
+                  onRetry: () {
+                    ref.invalidate(myJobsProvider);
+                  },
+                ),
+                data: (jobs) {
+                  final historyJobs = jobs.where((j) => j.status == JobStatus.completed || j.status == JobStatus.rejected).toList();
+                  if (historyJobs.isEmpty) {
+                    return const Center(child: Text('No move history yet.'));
+                  }
+                  return _JobList(jobs: historyJobs);
+                },
+              ),
+            ),
+          ],
+        ),
+        floatingActionButton: FloatingActionButton.extended(
+          backgroundColor: const Color(0xFF1E56A0),
+          foregroundColor: Colors.white,
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const CreateRequestScreen(),
+              ),
+            );
+          },
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('New Request'),
+        ),
       ),
     );
   }

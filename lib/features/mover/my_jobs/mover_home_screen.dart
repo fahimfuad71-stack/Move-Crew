@@ -6,6 +6,8 @@ import '../../../data/models/assignment.dart';
 import '../../../providers/auth_providers.dart';
 import '../../../providers/mover_assignment_providers.dart';
 import 'assignment_details_screen.dart';
+import '../reviews/mover_reviews_screen.dart';
+import '../history/mover_history_screen.dart';
 
 class MoverHomeScreen extends ConsumerWidget {
   const MoverHomeScreen({super.key});
@@ -14,53 +16,82 @@ class MoverHomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final assignmentsAsync = ref.watch(myMoverAssignmentsProvider);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-        title: const Text(
-          'My Jobs',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Logout',
-            onPressed: () => _confirmLogout(context, ref),
-            icon: const Icon(Icons.logout_rounded),
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF7F8FA),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+          title: const Text(
+            'MoveCrew Mover',
+            style: TextStyle(fontWeight: FontWeight.w600),
           ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(myMoverAssignmentsProvider);
-
-          await ref.read(myMoverAssignmentsProvider.future);
-        },
-        child: assignmentsAsync.when(
-          loading: () => const _LoadingView(),
-          error: (error, stackTrace) => _ErrorView(
-            message: error.toString(),
-            onRetry: () {
-              ref.invalidate(myMoverAssignmentsProvider);
-            },
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: 'My Tasks'),
+              Tab(text: 'Work History'),
+            ],
           ),
-          data: (assignments) {
-            if (assignments.isEmpty) {
-              return const _EmptyView();
-            }
-
-            return ListView.separated(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-              itemCount: assignments.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                return _AssignmentCard(assignment: assignments[index]);
+          actions: [
+            IconButton(
+              tooltip: 'My Reviews',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const MoverReviewsScreen()),
+                );
               },
-            );
-          },
+              icon: const Icon(Icons.star_outline_rounded),
+            ),
+            IconButton(
+              tooltip: 'Logout',
+              onPressed: () => _confirmLogout(context, ref),
+              icon: const Icon(Icons.logout_rounded),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ),
+        body: TabBarView(
+          children: [
+            RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(myMoverAssignmentsProvider);
+                await ref.read(myMoverAssignmentsProvider.future);
+              },
+              child: assignmentsAsync.when(
+                loading: () => const _LoadingView(),
+                error: (error, stackTrace) => _ErrorView(
+                  message: error.toString(),
+                  onRetry: () {
+                    ref.invalidate(myMoverAssignmentsProvider);
+                  },
+                ),
+                data: (assignments) {
+                  // Filter out completed jobs from "My Tasks"
+                  // Assignments are joined with jobs in getMyAssignments update (coming next)
+                  // For now we'll just check if job.status is completed if available, 
+                  // but we'll update the repository to be cleaner.
+                  
+                  final activeAssignments = assignments.where((a) => a.status != AssignmentStatus.rejected).toList();
+                  
+                  if (activeAssignments.isEmpty) {
+                    return const _EmptyView();
+                  }
+
+                  return ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                    itemCount: activeAssignments.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      return _AssignmentCard(assignment: activeAssignments[index]);
+                    },
+                  );
+                },
+              ),
+            ),
+            const MoverHistoryScreen(),
+          ],
         ),
       ),
     );
@@ -158,7 +189,10 @@ class _AssignmentCard extends ConsumerWidget {
                           ),
                         ),
                       ),
-                      _AssignmentStatusChip(status: assignment.status),
+                      _AssignmentStatusChip(
+                        assignmentStatus: assignment.status,
+                        jobStatus: job.status,
+                      ),
                     ],
                   ),
 
@@ -244,42 +278,56 @@ class _AssignmentCard extends ConsumerWidget {
 }
 
 class _AssignmentStatusChip extends StatelessWidget {
-  const _AssignmentStatusChip({required this.status});
+  const _AssignmentStatusChip({
+    required this.assignmentStatus,
+    required this.jobStatus,
+  });
 
-  final AssignmentStatus status;
+  final AssignmentStatus assignmentStatus;
+  final JobStatus jobStatus;
 
   @override
   Widget build(BuildContext context) {
-    final config = _config(status);
+    String label;
+    Color color;
+
+    if (assignmentStatus == AssignmentStatus.accepted &&
+        jobStatus == JobStatus.inProgress) {
+      label = 'In Progress';
+      color = const Color(0xFF1E7FCB);
+    } else if (assignmentStatus == AssignmentStatus.accepted &&
+        jobStatus == JobStatus.completed) {
+      label = 'Completed';
+      color = const Color(0xFF0F9D58);
+    } else {
+      label = switch (assignmentStatus) {
+        AssignmentStatus.pending => 'Pending',
+        AssignmentStatus.accepted => 'Accepted',
+        AssignmentStatus.rejected => 'Rejected',
+      };
+
+      color = switch (assignmentStatus) {
+        AssignmentStatus.pending => const Color(0xFF9AA5B1),
+        AssignmentStatus.accepted => const Color(0xFF2E9E5B),
+        AssignmentStatus.rejected => const Color(0xFFD64545),
+      };
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: config.$2.withValues(alpha: 0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
-        config.$1,
+        label,
         style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: config.$2,
+          color: color,
         ),
       ),
     );
-  }
-
-  (String, Color) _config(AssignmentStatus status) {
-    switch (status) {
-      case AssignmentStatus.pending:
-        return ('Pending Response', const Color(0xFF9AA5B1));
-
-      case AssignmentStatus.accepted:
-        return ('Accepted', const Color(0xFF2E9E5B));
-
-      case AssignmentStatus.rejected:
-        return ('Rejected', const Color(0xFFD64545));
-    }
   }
 }
 

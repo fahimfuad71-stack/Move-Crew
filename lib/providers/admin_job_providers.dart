@@ -4,6 +4,7 @@ import '../data/models/job.dart';
 import '../data/models/job_item.dart';
 import '../data/models/user.dart';
 import '../data/repositories/admin_job_repository.dart';
+import '../data/repositories/admin_monitoring_repository.dart';
 import '../data/supabase_client.dart';
 
 final adminJobRepositoryProvider = Provider<AdminJobRepository>((ref) {
@@ -32,3 +33,15 @@ final adminCustomerProvider = FutureProvider.autoDispose
     .family<AppUser, String>((ref, customerId) {
       return ref.watch(adminJobRepositoryProvider).getCustomerById(customerId);
     });
+
+final adminJobStatsProvider = FutureProvider.autoDispose<Map<String, int>>((ref) {
+  return ref.watch(adminJobRepositoryProvider).getJobStats();
+});
+
+final adminMonitoringRepositoryProvider = Provider<AdminMonitoringRepository>((ref) {
+  return AdminMonitoringRepository(ref.watch(supabaseClientProvider));
+});
+
+final activeMovesProvider = FutureProvider.autoDispose<List<ActiveMonitoringInfo>>((ref) {
+  return ref.watch(adminMonitoringRepositoryProvider).getActiveMoves();
+});

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../data/models/assignment.dart';
 import '../data/models/job.dart';
 import '../data/models/job_item.dart';
 import '../data/repositories/customer_job_repository.dart';
@@ -23,4 +24,9 @@ final jobProvider = FutureProvider.autoDispose.family<Job, String>((
 final jobItemsProvider = FutureProvider.autoDispose
     .family<List<JobItem>, String>((ref, jobId) {
       return ref.watch(customerJobRepositoryProvider).getJobItems(jobId);
+    });
+
+final jobAssignmentProvider = FutureProvider.autoDispose
+    .family<Assignment?, String>((ref, jobId) {
+      return ref.watch(customerJobRepositoryProvider).getJobAssignment(jobId);
     });

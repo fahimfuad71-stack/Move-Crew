@@ -11,6 +11,7 @@ class Job {
     required this.startTime,
     required this.status,
     required this.createdAt,
+    this.completedAt,
     this.instructions,
   });
 
@@ -35,6 +36,8 @@ class Job {
 
   final DateTime createdAt;
 
+  final DateTime? completedAt;
+
   factory Job.fromMap(Map<String, dynamic> map) {
     return Job(
       id: map['id'] as String,
@@ -47,6 +50,9 @@ class Job {
       instructions: map['instructions'] as String?,
       status: JobStatus.fromString(map['status'] as String),
       createdAt: DateTime.parse(map['created_at'] as String),
+      completedAt: map['completed_at'] != null
+          ? DateTime.parse(map['completed_at'] as String)
+          : null,
     );
   }
 }

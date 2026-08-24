@@ -4,7 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/status_enums.dart';
 import '../../../data/models/job.dart';
 import '../../../data/models/job_item.dart';
+import '../../../providers/review_providers.dart';
 import '../../../providers/customer_job_providers.dart';
+import '../../../data/models/review.dart';
+import '../tracking/customer_live_map_screen.dart';
 
 class CustomerJobDetailsScreen extends ConsumerWidget {
   const CustomerJobDetailsScreen({required this.jobId, super.key});
@@ -67,6 +70,14 @@ class _JobDetailsContent extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
         _HeaderCard(job: job),
+        if (job.status == JobStatus.assigned || job.status == JobStatus.inProgress) ...[
+          const SizedBox(height: 16),
+          _TrackMoverButton(jobId: job.id),
+        ],
+        if (job.status == JobStatus.completed) ...[
+          const SizedBox(height: 16),
+          _RatingSection(job: job),
+        ],
         const SizedBox(height: 16),
 
         _SectionCard(
@@ -278,6 +289,246 @@ class _HeaderCard extends StatelessWidget {
     return '${date.day}/'
         '${date.month}/'
         '${date.year}';
+  }
+}
+
+class _TrackMoverButton extends ConsumerWidget {
+  const _TrackMoverButton({required this.jobId});
+
+  final String jobId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final assignmentAsync = ref.watch(jobAssignmentProvider(jobId));
+
+    return assignmentAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (e, s) => const SizedBox.shrink(),
+      data: (assignment) {
+        if (assignment == null) return const SizedBox.shrink();
+
+        return SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => CustomerLiveMapScreen(
+                    assignmentId: assignment.id,
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(Icons.map_outlined),
+            label: const Text('Track Mover Live'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1E56A0),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _RatingSection extends ConsumerWidget {
+  const _RatingSection({required this.job});
+
+  final Job job;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final reviewAsync = ref.watch(jobReviewProvider(job.id));
+
+    return reviewAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (e, s) => const SizedBox.shrink(),
+      data: (review) {
+        if (review != null) {
+          return _SectionCard(
+            title: 'Your Review',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: List.generate(5, (index) {
+                    return Icon(
+                      index < review.rating ? Icons.star : Icons.star_border,
+                      color: Colors.orange,
+                    );
+                  }),
+                ),
+                if (review.comment != null && review.comment!.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    review.comment!,
+                    style: const TextStyle(fontStyle: FontStyle.italic),
+                  ),
+                ],
+              ],
+            ),
+          );
+        }
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE7F3FF),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF1E56A0)),
+          ),
+          child: Column(
+            children: [
+              const Text(
+                'How was your move?',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E56A0),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Share your feedback and rate your mover.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: () => _showReviewDialog(context, ref),
+                icon: const Icon(Icons.rate_review_outlined),
+                label: const Text('Rate Mover'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showReviewDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (context) => _SubmitReviewDialog(job: job),
+    );
+  }
+}
+
+class _SubmitReviewDialog extends ConsumerStatefulWidget {
+  const _SubmitReviewDialog({required this.job});
+
+  final Job job;
+
+  @override
+  ConsumerState<_SubmitReviewDialog> createState() => _SubmitReviewDialogState();
+}
+
+class _SubmitReviewDialogState extends ConsumerState<_SubmitReviewDialog> {
+  int _rating = 5;
+  final _commentController = TextEditingController();
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    setState(() => _submitting = true);
+
+    try {
+      final assignmentAsync = await ref.read(jobAssignmentProvider(widget.job.id).future);
+      if (assignmentAsync == null) throw Exception('Mover not found');
+
+      final review = Review(
+        id: '',
+        jobId: widget.job.id,
+        customerId: widget.job.customerId,
+        moverId: assignmentAsync.moverId,
+        rating: _rating,
+        comment: _commentController.text,
+        createdAt: DateTime.now(),
+      );
+
+      await ref.read(reviewRepositoryProvider).submitReview(review);
+
+      if (mounted) {
+        Navigator.pop(context);
+        ref.invalidate(jobReviewProvider(widget.job.id));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Thank you for your feedback!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error submitting review: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Rate Mover'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(5, (index) {
+                return IconButton(
+                  onPressed: () => setState(() => _rating = index + 1),
+                  icon: Icon(
+                    index < _rating ? Icons.star : Icons.star_border,
+                    color: Colors.orange,
+                    size: 32,
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _commentController,
+              decoration: const InputDecoration(
+                hintText: 'Add a comment (optional)',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _submitting ? null : _submit,
+          child: _submitting
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+              : const Text('Submit'),
+        ),
+      ],
+    );
   }
 }
 

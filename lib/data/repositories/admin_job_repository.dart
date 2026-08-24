@@ -129,4 +129,24 @@ class AdminJobRepository {
       newStatus: JobStatus.fromString(row['new_status'] as String),
     );
   }
+
+  // -------------------------------------------------------
+  // GET JOB STATS
+  // -------------------------------------------------------
+
+  Future<Map<String, int>> getJobStats() async {
+    final response = await _client
+        .from('admin_job_stats')
+        .select()
+        .single();
+
+    return {
+      'requested': response['requested_count'] as int,
+      'approved': response['approved_count'] as int,
+      'assigned': response['assigned_count'] as int,
+      'inProgress': response['in_progress_count'] as int,
+      'completed': response['completed_count'] as int,
+      'total': response['total_jobs'] as int,
+    };
+  }
 }

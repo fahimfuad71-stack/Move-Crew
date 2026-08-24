@@ -6,6 +6,7 @@ import '../../../providers/admin_job_providers.dart';
 import '../../../providers/auth_providers.dart';
 import '../request/incoming_request_details_screen.dart';
 import '../assignment/assign_movers_screen.dart';
+import '../monitoring/admin_monitoring_screen.dart';
 
 class AdminDashboardScreen extends ConsumerWidget {
   const AdminDashboardScreen({super.key});
@@ -13,6 +14,7 @@ class AdminDashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final requestsAsync = ref.watch(incomingAdminRequestsProvider);
+    final statsAsync = ref.watch(adminJobStatsProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
@@ -24,6 +26,15 @@ class AdminDashboardScreen extends ConsumerWidget {
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
         actions: [
+          IconButton(
+            tooltip: 'Live Monitoring',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const AdminMonitoringScreen()),
+              );
+            },
+            icon: const Icon(Icons.monitor_heart_outlined),
+          ),
           IconButton(
             tooltip: 'Assign Movers',
             onPressed: () {
@@ -46,32 +57,72 @@ class AdminDashboardScreen extends ConsumerWidget {
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(incomingAdminRequestsProvider);
+          ref.invalidate(adminJobStatsProvider);
 
-          await ref.read(incomingAdminRequestsProvider.future);
+          await Future.wait([
+            ref.read(incomingAdminRequestsProvider.future),
+            ref.read(adminJobStatsProvider.future),
+          ]);
         },
-        child: requestsAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, stackTrace) => _ErrorView(
-            message: error.toString(),
-            onRetry: () {
-              ref.invalidate(incomingAdminRequestsProvider);
-            },
-          ),
-          data: (requests) {
-            if (requests.isEmpty) {
-              return const _EmptyView();
-            }
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(
+              child: statsAsync.when(
+                loading: () => const SizedBox(
+                  height: 120,
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (e, s) => Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text('Error loading stats: $e'),
+                ),
+                data: (stats) => _StatsSection(stats: stats),
+              ),
+            ),
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: Text(
+                  'Incoming Requests',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+            requestsAsync.when(
+              loading: () => const SliverFillRemaining(
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              error: (error, stackTrace) => SliverFillRemaining(
+                child: _ErrorView(
+                  message: error.toString(),
+                  onRetry: () {
+                    ref.invalidate(incomingAdminRequestsProvider);
+                  },
+                ),
+              ),
+              data: (requests) {
+                if (requests.isEmpty) {
+                  return const SliverFillRemaining(child: _EmptyView());
+                }
 
-            return ListView.separated(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              itemCount: requests.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                return _RequestCard(job: requests[index]);
+                return SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _RequestCard(job: requests[index]),
+                        );
+                      },
+                      childCount: requests.length,
+                    ),
+                  ),
+                );
               },
-            );
-          },
+            ),
+          ],
         ),
       ),
     );
@@ -109,6 +160,98 @@ class AdminDashboardScreen extends ConsumerWidget {
     }
 
     await ref.read(authRepositoryProvider).signOut();
+  }
+}
+
+class _StatsSection extends StatelessWidget {
+  const _StatsSection({required this.stats});
+
+  final Map<String, int> stats;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              _StatCard(
+                label: 'Requested',
+                count: stats['requested'] ?? 0,
+                color: const Color(0xFF9AA5B1),
+              ),
+              const SizedBox(width: 12),
+              _StatCard(
+                label: 'Approved',
+                count: stats['approved'] ?? 0,
+                color: const Color(0xFF2E9E5B),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _StatCard(
+                label: 'Assigned',
+                count: stats['assigned'] ?? 0,
+                color: const Color(0xFF1E7FCB),
+              ),
+              const SizedBox(width: 12),
+              _StatCard(
+                label: 'Completed',
+                count: stats['completed'] ?? 0,
+                color: const Color(0xFF0F9D58),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  const _StatCard({
+    required this.label,
+    required this.count,
+    required this.color,
+  });
+
+  final String label;
+  final int count;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E5EA)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(fontSize: 14, color: Color(0xFF5C6470)),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              count.toString(),
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
