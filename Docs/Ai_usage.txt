@@ -1,0 +1,134 @@
+============================================================
+           AI USAGE DECLARATION
+============================================================
+
+Name: Fahim Montasir
+Student ID: 23141013
+Email: fahim.montasir1@g.bracu.ac.bd
+Project: MoveCrew (Smart Logistics & Workforce Tracking System)
+Date: 25/08/2026
+
+------------------------------------------------------------
+1. AI TOOLS USED (check all that apply)
+------------------------------------------------------------
+[ ] None
+[✓] ChatGPT
+[ ] GitHub Copilot
+[✓] Google Gemini
+[✓] Claude
+[ ] Cursor
+[ ] Other: ________________
+
+------------------------------------------------------------
+2. PURPOSE OF AI USE (check all that apply)
+------------------------------------------------------------
+[✓] Learning/understanding concepts
+[✓] Debugging my code
+[✓] Generating code snippets
+[ ] Writing text content
+[✓] Design/styling ideas
+[ ] Image generation
+[ ] Other: ________________
+
+------------------------------------------------------------
+3. DESCRIPTION OF AI USE
+------------------------------------------------------------
+AI was used as a development aid throughout the lifecycle of this
+project. Initially, I used AI to understand the project requirements,
+develop an idea of how to approach and build the application, and
+organize the project files in a structured and manageable way. Claude
+was mainly used during the planning stage to analyze the project brief,
+divide the development work into different phases, and suggest an
+organized folder structure following the Clean Architecture pattern
+(Data, Features, Core).
+
+During the initial development stages, ChatGPT was used to set up the
+backend infrastructure, particularly the Supabase database structure,
+authentication flow, and connection logic between Flutter and Supabase.
+It was also used to generate and improve code for several parts of the
+application, including role-based authentication, job and assignment
+handling, database queries, state-management logic, and other
+backend-related functions. ChatGPT was also used to debug different
+coding, integration, and configuration problems encountered during
+development.
+
+As the project progressed, I utilized the Agent mode version of Google
+Gemini inside Android Studio for more complex implementation and
+debugging tasks. Gemini helped significantly in implementing the
+real-time GPS integration using the Google Maps API, including mover
+location tracking and storing/updating location data in the database.
+It also assisted in implementing the customer rating and review system
+and some of the more complex relationships between customers, movers,
+jobs, and assignments.
+
+Gemini Agent mode was also used to improve the UI/UX of the application.
+It helped implement both Dark and Light themes, improve the overall
+appearance and organization of the screens, refine role-specific
+dashboard navigation, and enhance interactive elements such as pop-up
+dialogs, confirmation screens, status indicators, navigation behavior,
+and user feedback messages.
+
+AI was also used during the final stages to debug issues related to
+state management, Supabase queries, Row Level Security (RLS) policies,
+GPS functionality, navigation, UI behavior, and other problems
+identified during testing.
+
+However, I manually reviewed and integrated the suggested code, made
+changes where necessary, tested the different features and user roles,
+and performed the final testing and debugging of the application before
+submission.
+
+------------------------------------------------------------
+4. AI-ASSISTED SECTIONS
+------------------------------------------------------------
+List specific files/sections where AI helped significantly:
+
+File:   lib/data/supabase_client.dart
+Section: Supabase initialization and session handling
+
+File:   lib/data/repositories/auth_repository.dart
+Section: Login/Sign-up logic and role-based data fetching
+
+File:   lib/data/repositories/location_repository.dart
+Section: GPS tracking and background location recording
+
+File:   lib/data/repositories/review_repository.dart
+Section: Customer-to-Mover rating and comment submission
+
+File:   lib/data/repositories/admin_job_repository.dart
+Section: Complex RPC calls for job assignments
+
+File:   lib/data/models/job.dart
+Section: Data mapping from Supabase JSON
+
+File:   lib/data/models/mover_location.dart
+Section: Geo-coordinate data structures
+
+File: lib/features/admin/dashboard/
+Section: Admin dashboard UI and job monitoring view
+
+File:   lib/app.dart
+Section: Theme implementation (Dark/Light mode)
+
+File:   lib/main.dart
+Section: Provider wiring and dependency injection
+
+File: lib/core/constants/status_enums.dart
+Section: State-machine logic for Job and Assignment statuses
+
+File: lib/providers/
+Section: State management for Auth and Jobs
+
+------------------------------------------------------------
+5. DECLARATION
+------------------------------------------------------------
+I declare that:
+• This disclosure is complete and accurate
+• I understand all code in my submission
+• I can explain and modify my work if asked
+• I take full responsibility for my submission
+
+Signature: _______________________
+Date: 25/08/2026
+
+============================================================
