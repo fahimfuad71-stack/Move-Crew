@@ -6,6 +6,7 @@ import '../../../core/widgets/job_status_chip.dart';
 import '../../../providers/admin_job_providers.dart';
 import '../../../providers/admin_assignment_providers.dart';
 import '../../../core/widgets/sort_button.dart';
+import '../../../providers/theme_provider.dart';
 import '../request/incoming_request_details_screen.dart';
 
 final adminFilteredJobsProvider = FutureProvider.autoDispose.family<List<Job>, JobStatus?>((ref, status) {
@@ -26,13 +27,18 @@ class _AdminJobListScreenState extends ConsumerState<AdminJobListScreen> {
   @override
   Widget build(BuildContext context) {
     final jobsAsync = ref.watch(adminFilteredJobsProvider(widget.status));
+    final isDark = ref.watch(themeModeProvider) == ThemeMode.dark;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
         title: Text(widget.status == null ? 'All Jobs' : '${widget.status!.value} Jobs'),
+        actions: [
+          IconButton(
+            onPressed: () => ref.read(themeModeProvider.notifier).toggle(),
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+          ),
+          const SizedBox(width: 8),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: Padding(
@@ -86,7 +92,7 @@ class _JobCard extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Color(0xFFE2E5EA)),
+        side: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.1)),
       ),
       child: InkWell(
         onTap: () {

@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/status_enums.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/job_status_chip.dart';
+import '../../../core/widgets/premium_card.dart';
 import '../../../data/models/job.dart';
-import '../../../data/models/job_item.dart';
 import '../../../providers/review_providers.dart';
 import '../../../providers/customer_job_providers.dart';
 import '../../../data/models/review.dart';
-import '../../../providers/mover_assignment_providers.dart';
+import '../../../providers/theme_provider.dart';
 import '../tracking/customer_live_map_screen.dart';
 
 class CustomerJobDetailsScreen extends ConsumerWidget {
@@ -19,40 +20,50 @@ class CustomerJobDetailsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final jobAsync = ref.watch(jobProvider(jobId));
+    final isDark = ref.watch(themeModeProvider) == ThemeMode.dark;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-        title: const Text(
-          'Request Details',
-          style: TextStyle(fontWeight: FontWeight.w600),
+        title: Text(
+          'Move Details',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.white : AppColors.obsidianDark,
+          ),
+        ),
+        actions: [
+          IconButton(
+            onPressed: () {
+              ref.read(themeModeProvider.notifier).toggle();
+            },
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+          ),
+          const SizedBox(width: 8),
+        ],
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: isDark ? Colors.white : AppColors.obsidianDark,
+          ),
+          onPressed: () => Navigator.pop(context),
         ),
       ),
       body: jobAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => _ErrorView(
-          message: error.toString(),
-          onRetry: () {
+        error: (error, _) => Center(child: Text(error.toString())),
+        data: (job) => RefreshIndicator(
+          onRefresh: () async {
             ref.invalidate(jobProvider(jobId));
+            ref.invalidate(jobItemsProvider(jobId));
+            await Future.wait([
+              ref.read(jobProvider(jobId).future),
+              ref.read(jobItemsProvider(jobId).future),
+            ]);
           },
+          child: _JobDetailsContent(job: job),
         ),
-        data: (job) {
-          return RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(jobProvider(jobId));
-
-              ref.invalidate(jobItemsProvider(jobId));
-
-              await Future.wait([
-                ref.read(jobProvider(jobId).future),
-                ref.read(jobItemsProvider(jobId).future),
-              ]);
-            },
-            child: _JobDetailsContent(job: job),
-          );
-        },
       ),
     );
   }
@@ -60,7 +71,6 @@ class CustomerJobDetailsScreen extends ConsumerWidget {
 
 class _JobDetailsContent extends ConsumerWidget {
   const _JobDetailsContent({required this.job});
-
   final Job job;
 
   @override
@@ -68,216 +78,90 @@ class _JobDetailsContent extends ConsumerWidget {
     final itemsAsync = ref.watch(jobItemsProvider(job.id));
 
     return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       children: [
-        _HeaderCard(job: job),
+        _HeaderSection(job: job),
         if (job.status == JobStatus.assigned || job.status == JobStatus.inProgress) ...[
           const SizedBox(height: 16),
-          _TrackMoverButton(jobId: job.id),
+          _TrackMoverAction(jobId: job.id),
         ],
         if (job.status == JobStatus.completed) ...[
           const SizedBox(height: 16),
-          _RatingSection(job: job),
+          _RatingAction(job: job),
         ],
-        const SizedBox(height: 16),
-
-        _SectionCard(
-          title: 'Move Information',
+        const SizedBox(height: 24),
+        const Text('MOVE INFORMATION', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.stormyLight, letterSpacing: 1)),
+        const SizedBox(height: 12),
+        PremiumCard(
           child: Column(
             children: [
-              _InfoRow(
-                icon: Icons.trip_origin_rounded,
-                label: 'Pickup',
-                value: job.pickupAddress,
-              ),
-              const Divider(height: 28),
-              _InfoRow(
-                icon: Icons.location_on_outlined,
-                label: 'Destination',
-                value: job.destinationAddress,
-              ),
-              const Divider(height: 28),
-              _InfoRow(
-                icon: Icons.calendar_today_outlined,
-                label: 'Move Date',
-                value: _formatDate(job.moveDate),
-              ),
-              const Divider(height: 28),
-              _InfoRow(
-                icon: Icons.access_time_rounded,
-                label: 'Start Time',
-                value: _formatTime(job.startTime),
+              _ModernInfoRow(icon: Icons.trip_origin_rounded, label: 'PICKUP', value: job.pickupAddress),
+              const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider()),
+              _ModernInfoRow(icon: Icons.location_on_rounded, label: 'DESTINATION', value: job.destinationAddress),
+              const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider()),
+              Row(
+                children: [
+                  Expanded(child: _ModernInfoRow(icon: Icons.calendar_today_rounded, label: 'DATE', value: job.moveDate.toString().split(' ')[0])),
+                  Expanded(child: _ModernInfoRow(icon: Icons.access_time_rounded, label: 'TIME', value: job.startTime)),
+                ],
               ),
             ],
           ),
         ),
-
-        const SizedBox(height: 16),
-
-        _SectionCard(
-          title: 'Instructions',
-          child: Text(
-            job.instructions == null || job.instructions!.trim().isEmpty
-                ? 'No special instructions provided.'
-                : job.instructions!,
-            style: const TextStyle(
-              fontSize: 15,
-              height: 1.5,
-              color: Color(0xFF1A1E23),
-            ),
+        const SizedBox(height: 24),
+        const Text('MOVING ITEMS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.stormyLight, letterSpacing: 1)),
+        const SizedBox(height: 12),
+        itemsAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => Text('Error: $e'),
+          data: (items) => PremiumCard(
+            child: items.isEmpty
+                ? const Text('No items listed.')
+                : Column(
+                    children: List.generate(items.length, (i) {
+                      return Padding(
+                        padding: EdgeInsets.only(bottom: i == items.length - 1 ? 0 : 16),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.inventory_2_rounded, size: 20, color: AppColors.tealPrimary),
+                            const SizedBox(width: 12),
+                            Expanded(child: Text(items[i].name, style: const TextStyle(fontWeight: FontWeight.w500))),
+                            Text('x${items[i].quantity}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      );
+                    }),
+                  ),
           ),
         ),
-
-        const SizedBox(height: 16),
-
-        _SectionCard(
-          title: 'Moving Items',
-          child: itemsAsync.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.all(20),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-            error: (error, stackTrace) => Column(
-              children: [
-                const Icon(Icons.error_outline, size: 36),
-                const SizedBox(height: 8),
-                Text(
-                  'Could not load items.\n$error',
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    ref.invalidate(jobItemsProvider(job.id));
-                  },
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('Retry'),
-                ),
-              ],
-            ),
-            data: (items) {
-              if (items.isEmpty) {
-                return const Text('No items found for this request.');
-              }
-
-              return Column(
-                children: List.generate(items.length, (index) {
-                  final item = items[index];
-
-                  return Column(
-                    children: [
-                      _ItemRow(item: item),
-                      if (index < items.length - 1) const Divider(height: 24),
-                    ],
-                  );
-                }),
-              );
-            },
-          ),
-        ),
+        const SizedBox(height: 100),
       ],
     );
   }
-
-  static String _formatDate(DateTime date) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-
-    return '${date.day} '
-        '${months[date.month - 1]} '
-        '${date.year}';
-  }
-
-  static String _formatTime(String time) {
-    final parts = time.split(':');
-
-    if (parts.length < 2) {
-      return time;
-    }
-
-    final hour = int.tryParse(parts[0]);
-
-    final minute = int.tryParse(parts[1]);
-
-    if (hour == null || minute == null) {
-      return time;
-    }
-
-    final suffix = hour >= 12 ? 'PM' : 'AM';
-
-    final displayHour = hour == 0
-        ? 12
-        : hour > 12
-        ? hour - 12
-        : hour;
-
-    return '$displayHour:'
-        '${minute.toString().padLeft(2, '0')} '
-        '$suffix';
-  }
 }
 
-class _HeaderCard extends StatelessWidget {
-  const _HeaderCard({required this.job});
-
+class _HeaderSection extends StatelessWidget {
+  const _HeaderSection({required this.job});
   final Job job;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E5EA)),
-      ),
+    return PremiumCard(
+      color: AppColors.tealPrimary.withOpacity(0.1),
       child: Row(
         children: [
           Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: const Color(0xFFD7E6F7),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.local_shipping_outlined,
-              color: Color(0xFF1E56A0),
-            ),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: AppColors.tealPrimary, borderRadius: BorderRadius.circular(12)),
+            child: const Icon(Icons.local_shipping_rounded, color: Colors.white, size: 24),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  job.jobCode,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Created ${_formatCreatedDate(job.createdAt)}',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF5C6470),
-                  ),
-                ),
+                Text(job.jobCode, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                const Text('ESTIMATED MOVE', style: TextStyle(color: AppColors.tealPrimary, fontWeight: FontWeight.bold, fontSize: 10, letterSpacing: 1)),
               ],
             ),
           ),
@@ -286,356 +170,10 @@ class _HeaderCard extends StatelessWidget {
       ),
     );
   }
-
-  static String _formatCreatedDate(DateTime date) {
-    return '${date.day}/'
-        '${date.month}/'
-        '${date.year}';
-  }
 }
 
-class _TrackMoverButton extends ConsumerWidget {
-  const _TrackMoverButton({required this.jobId});
-
-  final String jobId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final assignmentAsync = ref.watch(jobAssignmentProvider(jobId));
-
-    return assignmentAsync.when(
-      loading: () => const SizedBox.shrink(),
-      error: (e, s) => const SizedBox.shrink(),
-      data: (assignment) {
-        if (assignment == null) return const SizedBox.shrink();
-
-        return Column(
-          children: [
-            _MoverInfoCard(moverId: assignment.moverId),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => CustomerLiveMapScreen(
-                        assignmentId: assignment.id,
-                      ),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.map_outlined),
-                label: const Text('Track Mover Live'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1E56A0),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _MoverInfoCard extends ConsumerWidget {
-  const _MoverInfoCard({required this.moverId});
-  final String moverId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final moverAsync = ref.watch(moverProfileProvider(moverId));
-
-    return moverAsync.when(
-      loading: () => const LinearProgressIndicator(),
-      error: (e, s) => const SizedBox.shrink(),
-      data: (mover) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE2E5EA)),
-        ),
-        child: Row(
-          children: [
-            const CircleAvatar(
-              backgroundColor: Color(0xFFD7E6F7),
-              child: Icon(Icons.engineering_outlined, color: Color(0xFF1E56A0)),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(mover['full_name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  Text('ID: ${mover['employee_code']}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.star, color: Colors.orange, size: 16),
-                    const SizedBox(width: 4),
-                    Text(
-                      mover['avg_rating'] > 0 ? (mover['avg_rating'] as double).toStringAsFixed(1) : 'New',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                Text('${mover['total_reviews']} reviews', style: const TextStyle(fontSize: 11, color: Colors.grey)),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _RatingSection extends ConsumerWidget {
-  const _RatingSection({required this.job});
-
-  final Job job;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final reviewAsync = ref.watch(jobReviewProvider(job.id));
-
-    return reviewAsync.when(
-      loading: () => const SizedBox.shrink(),
-      error: (e, s) => const SizedBox.shrink(),
-      data: (review) {
-        if (review != null) {
-          return _SectionCard(
-            title: 'Your Review',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: List.generate(5, (index) {
-                    return Icon(
-                      index < review.rating ? Icons.star : Icons.star_border,
-                      color: Colors.orange,
-                    );
-                  }),
-                ),
-                if (review.comment != null && review.comment!.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    review.comment!,
-                    style: const TextStyle(fontStyle: FontStyle.italic),
-                  ),
-                ],
-              ],
-            ),
-          );
-        }
-
-        return Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0xFFE7F3FF),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFF1E56A0)),
-          ),
-          child: Column(
-            children: [
-              const Text(
-                'How was your move?',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E56A0),
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Share your feedback and rate your mover.',
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: () => _showReviewDialog(context, ref),
-                icon: const Icon(Icons.rate_review_outlined),
-                label: const Text('Rate Mover'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  void _showReviewDialog(BuildContext context, WidgetRef ref) {
-    showDialog(
-      context: context,
-      builder: (context) => _SubmitReviewDialog(job: job),
-    );
-  }
-}
-
-class _SubmitReviewDialog extends ConsumerStatefulWidget {
-  const _SubmitReviewDialog({required this.job});
-
-  final Job job;
-
-  @override
-  ConsumerState<_SubmitReviewDialog> createState() => _SubmitReviewDialogState();
-}
-
-class _SubmitReviewDialogState extends ConsumerState<_SubmitReviewDialog> {
-  int _rating = 5;
-  final _commentController = TextEditingController();
-  bool _submitting = false;
-
-  @override
-  void dispose() {
-    _commentController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    setState(() => _submitting = true);
-
-    try {
-      final assignmentAsync = await ref.read(jobAssignmentProvider(widget.job.id).future);
-      if (assignmentAsync == null) throw Exception('Mover not found');
-
-      final review = Review(
-        id: '',
-        jobId: widget.job.id,
-        customerId: widget.job.customerId,
-        moverId: assignmentAsync.moverId,
-        rating: _rating,
-        comment: _commentController.text,
-        createdAt: DateTime.now(),
-      );
-
-      await ref.read(reviewRepositoryProvider).submitReview(review);
-
-      if (mounted) {
-        Navigator.pop(context);
-        ref.invalidate(jobReviewProvider(widget.job.id));
-        ref.invalidate(moverReviewsProvider(assignmentAsync.moverId));
-        ref.invalidate(moverProfileProvider(assignmentAsync.moverId));
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Thank you for your feedback!')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error submitting review: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Rate Mover'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(5, (index) {
-                return IconButton(
-                  onPressed: () => setState(() => _rating = index + 1),
-                  icon: Icon(
-                    index < _rating ? Icons.star : Icons.star_border,
-                    color: Colors.orange,
-                    size: 32,
-                  ),
-                );
-              }),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _commentController,
-              decoration: const InputDecoration(
-                hintText: 'Add a comment (optional)',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 3,
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _submitting ? null : _submit,
-          child: _submitting
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
-                )
-              : const Text('Submit'),
-        ),
-      ],
-    );
-  }
-}
-
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.title, required this.child});
-
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E5EA)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 16),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
+class _ModernInfoRow extends StatelessWidget {
+  const _ModernInfoRow({required this.icon, required this.label, required this.value});
   final IconData icon;
   final String label;
   final String value;
@@ -643,26 +181,15 @@ class _InfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 22, color: const Color(0xFF1E56A0)),
+        Icon(icon, size: 20, color: AppColors.tealPrimary),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                label,
-                style: const TextStyle(fontSize: 12, color: Color(0xFF5C6470)),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Theme.of(context).hintColor)),
+              Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
             ],
           ),
         ),
@@ -671,57 +198,128 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-class _ItemRow extends StatelessWidget {
-  const _ItemRow({required this.item});
-
-  final JobItem item;
+class _TrackMoverAction extends ConsumerWidget {
+  const _TrackMoverAction({required this.jobId});
+  final String jobId;
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Icon(Icons.inventory_2_outlined, color: Color(0xFF1E56A0)),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            item.name,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-          ),
-        ),
-        Text(
-          '× ${item.quantity}',
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(width: 12),
-        _ItemStatusChip(status: item.status),
-      ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final assignmentAsync = ref.watch(jobAssignmentProvider(jobId));
+    return assignmentAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (assignment) {
+        if (assignment == null) return const SizedBox.shrink();
+        return ElevatedButton.icon(
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CustomerLiveMapScreen(assignmentId: assignment.id))),
+          icon: const Icon(Icons.location_on_rounded),
+          label: const Text('TRACK LIVE LOCATION'),
+          style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 56)),
+        );
+      },
     );
   }
 }
 
-class _ItemStatusChip extends StatelessWidget {
-  const _ItemStatusChip({required this.status});
+class _RatingAction extends ConsumerWidget {
+  const _RatingAction({required this.job});
+  final Job job;
 
-  final JobItemStatus status;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final reviewAsync = ref.watch(jobReviewProvider(job.id));
+    return reviewAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (review) {
+        if (review != null) return PremiumCard(child: Text('Reviewed: ${review.rating} Stars'));
+        return ElevatedButton.icon(
+          onPressed: () => showDialog(context: context, builder: (_) => _SubmitReviewDialog(job: job)),
+          icon: const Icon(Icons.star_rounded),
+          label: const Text('RATE YOUR EXPERIENCE'),
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, minimumSize: const Size(double.infinity, 56)),
+        );
+      },
+    );
+  }
+}
+
+class _SubmitReviewDialog extends ConsumerStatefulWidget {
+  const _SubmitReviewDialog({required this.job});
+  final Job job;
+  @override
+  ConsumerState<_SubmitReviewDialog> createState() => _SubmitReviewDialogState();
+}
+
+class _SubmitReviewDialogState extends ConsumerState<_SubmitReviewDialog> {
+  int _rating = 5;
+  final _comment = TextEditingController();
+
+  @override
+  void dispose() {
+    _comment.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final label = switch (status) {
-      JobItemStatus.pending => 'Pending',
-      JobItemStatus.collected => 'Collected',
-      JobItemStatus.delivered => 'Delivered',
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: const Color(0xFF9AA5B1).withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(16),
+    return AlertDialog(
+      title: const Text('Rate Your Mover'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('How was the move?', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(
+              5,
+              (i) => IconButton(
+                onPressed: () => setState(() => _rating = i + 1),
+                icon: Icon(
+                  i < _rating ? Icons.star_rounded : Icons.star_outline_rounded,
+                  color: Colors.orange,
+                  size: 32,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _comment,
+            maxLines: 3,
+            decoration: InputDecoration(
+              labelText: 'Message (Optional)',
+              hintText: 'Share your experience with this mover...',
+              alignLabelWithHint: true,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ],
       ),
-      child: Text(
-        label,
-        style: const TextStyle(fontSize: 11, color: Color(0xFF5C6470)),
-      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+        FilledButton(
+          onPressed: () async {
+            final assignment = await ref.read(jobAssignmentProvider(widget.job.id).future);
+            if (assignment == null) return;
+            await ref.read(reviewRepositoryProvider).submitReview(Review(
+                  id: '',
+                  jobId: widget.job.id,
+                  customerId: widget.job.customerId,
+                  moverId: assignment.moverId,
+                  rating: _rating,
+                  comment: _comment.text,
+                  createdAt: DateTime.now(),
+                ));
+            if (!context.mounted) return;
+            Navigator.pop(context);
+            ref.invalidate(jobReviewProvider(widget.job.id));
+          },
+          child: const Text('SUBMIT REVIEW'),
+        ),
+      ],
     );
   }
 }

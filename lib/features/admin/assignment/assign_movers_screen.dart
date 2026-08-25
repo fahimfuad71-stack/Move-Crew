@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/status_enums.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/job_status_chip.dart';
+import '../../../core/widgets/premium_card.dart';
 import '../../../core/widgets/sort_button.dart';
 import '../../../data/models/admin_mover_assignment.dart';
 import '../../../data/models/job.dart';
 import '../../../data/models/mover_profile.dart';
 import '../../../providers/admin_assignment_providers.dart';
 import '../../../providers/admin_assignment_status_providers.dart';
+import '../../../providers/theme_provider.dart';
 import '../management/admin_mover_detail_screen.dart';
 
 class AssignMoversScreen extends ConsumerStatefulWidget {
@@ -25,83 +28,71 @@ class _AssignMoversScreenState extends ConsumerState<AssignMoversScreen> {
   Widget build(BuildContext context) {
     final jobsAsync = ref.watch(approvedJobsProvider);
     final moversAsync = ref.watch(availableMoversProvider);
+    final isDark = ref.watch(themeModeProvider) == ThemeMode.dark;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-        title: const Text(
-          'Assign Movers',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                SortButton(
-                  currentOrder: _sortOrder,
-                  onChanged: (order) => setState(() => _sortOrder = order),
-                ),
-              ],
-            ),
+        title: const Text('Assign Movers', style: TextStyle(fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+            onPressed: () {
+              ref.read(themeModeProvider.notifier).toggle();
+            },
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
           ),
-        ),
+          const SizedBox(width: 8),
+        ],
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(approvedJobsProvider);
           ref.invalidate(availableMoversProvider);
-
           await Future.wait([
             ref.read(approvedJobsProvider.future),
             ref.read(availableMoversProvider.future),
           ]);
         },
-        child: jobsAsync.when(
-          loading: () => const _LoadingView(),
-          error: (error, stackTrace) => _ErrorView(
-            message: error.toString(),
-            onRetry: () {
-              ref.invalidate(approvedJobsProvider);
-            },
-          ),
-          data: (jobs) {
-            return moversAsync.when(
-              loading: () => const _LoadingView(),
-              error: (error, stackTrace) => _ErrorView(
-                message: error.toString(),
-                onRetry: () {
-                  ref.invalidate(availableMoversProvider);
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('APPROVED JOBS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Theme.of(context).hintColor, letterSpacing: 1)),
+                  SortButton(currentOrder: _sortOrder, onChanged: (o) => setState(() => _sortOrder = o)),
+                ],
+              ),
+            ),
+            Expanded(
+              child: jobsAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Center(child: Text(e.toString())),
+                data: (jobs) {
+                  return moversAsync.when(
+                    loading: () => const Center(child: CircularProgressIndicator()),
+                    error: (e, _) => Center(child: Text(e.toString())),
+                    data: (movers) {
+                      if (jobs.isEmpty) return const _EmptyView();
+
+                      final sorted = List<Job>.from(jobs);
+                      sorted.sort((a, b) => _sortOrder == SortOrder.descending
+                          ? b.createdAt.compareTo(a.createdAt)
+                          : a.createdAt.compareTo(b.createdAt));
+
+                      return ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                        itemCount: sorted.length,
+                        itemBuilder: (context, index) => _JobAssignmentCard(job: sorted[index], movers: movers),
+                      );
+                    },
+                  );
                 },
               ),
-              data: (movers) {
-                if (jobs.isEmpty) {
-                  return const _EmptyView();
-                }
-
-                final sortedJobs = List<Job>.from(jobs);
-                if (_sortOrder == SortOrder.descending) {
-                  sortedJobs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-                } else {
-                  sortedJobs.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-                }
-
-                return ListView.separated(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-                  itemCount: sortedJobs.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    return _JobAssignmentCard(job: sortedJobs[index], movers: movers);
-                  },
-                );
-              },
-            );
-          },
+            ),
+          ],
         ),
       ),
     );
@@ -352,182 +343,68 @@ class _JobAssignmentCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final assignmentsAsync = ref.watch(adminMoverAssignmentsProvider(job.id));
 
-    return Card(
-      margin: EdgeInsets.zero,
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Color(0xFFE2E5EA)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    job.jobCode,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                JobStatusChip(status: job.status),
-              ],
-            ),
-
-            const SizedBox(height: 16),
-
-            _InfoRow(
-              icon: Icons.trip_origin_rounded,
-              label: 'Pickup',
-              value: job.pickupAddress,
-            ),
-
-            const SizedBox(height: 10),
-
-            _InfoRow(
-              icon: Icons.location_on_outlined,
-              label: 'Destination',
-              value: job.destinationAddress,
-            ),
-
-            const Divider(height: 28),
-
-            Row(
-              children: [
-                const Icon(
-                  Icons.calendar_today_outlined,
-                  size: 18,
-                  color: Color(0xFF5C6470),
-                ),
-                const SizedBox(width: 8),
-                Text(_formatDate(job.moveDate)),
-                const Spacer(),
-                const Icon(
-                  Icons.access_time_rounded,
-                  size: 18,
-                  color: Color(0xFF5C6470),
-                ),
-                const SizedBox(width: 6),
-                Text(_formatTime(job.startTime)),
-              ],
-            ),
-
-            const Divider(height: 32),
-
-            const Text(
-              'Assigned Movers',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-            ),
-
-            const SizedBox(height: 10),
-
-            assignmentsAsync.when(
-              loading: () => const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: LinearProgressIndicator(),
-              ),
-              error: (error, stackTrace) =>
-                  Text('Could not load mover statuses: $error'),
-              data: (assignments) {
-                if (assignments.isEmpty) {
-                  return const Text(
-                    'No movers assigned yet.',
-                    style: TextStyle(color: Color(0xFF5C6470)),
-                  );
-                }
-
-                return Column(
-                  children: assignments
-                      .map(
-                        (assignment) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _MoverStatusRow(assignment: assignment),
-                        ),
-                      )
-                      .toList(),
-                );
-              },
-            ),
-
-            const SizedBox(height: 12),
-
-            assignmentsAsync.when(
-              loading: () => const SizedBox.shrink(),
-              error: (error, stackTrace) => const SizedBox.shrink(),
-              data: (assignments) {
-                final hasRejected = assignments.any(
-                  (assignment) =>
-                      assignment.status == AssignmentStatus.rejected,
-                );
-
-                final buttonText = assignments.isEmpty
-                    ? 'Assign Movers'
-                    : hasRejected
-                    ? 'Reassign / Add Movers'
-                    : 'Assign More Movers';
-
-                return SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF1E56A0),
-                      minimumSize: const Size(double.infinity, 48),
-                    ),
-                    onPressed: () => _openMoverSelection(
-                      context: context,
-                      ref: ref,
-                      existingAssignments: assignments,
-                    ),
-                    icon: const Icon(Icons.person_add_alt_1_rounded),
-                    label: Text(buttonText),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
+    return PremiumCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text(job.jobCode, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+              JobStatusChip(status: job.status),
+            ],
+          ),
+          const SizedBox(height: 20),
+          _AddressRow(icon: Icons.trip_origin_rounded, address: job.pickupAddress, label: 'PICKUP'),
+          const Padding(
+            padding: EdgeInsets.only(left: 11, top: 4, bottom: 4),
+            child: SizedBox(height: 16, child: VerticalDivider(thickness: 2, width: 1)),
+          ),
+          _AddressRow(icon: Icons.location_on_rounded, address: job.destinationAddress, label: 'DESTINATION'),
+          const Divider(height: 32),
+          Row(
+            children: [
+              Icon(Icons.calendar_today_rounded, size: 16, color: Theme.of(context).hintColor),
+              const SizedBox(width: 8),
+              Text(job.moveDate.toString().split(' ')[0], style: TextStyle(color: Theme.of(context).hintColor)),
+              const Spacer(),
+              Icon(Icons.access_time_rounded, size: 16, color: Theme.of(context).hintColor),
+              const SizedBox(width: 6),
+              Text(job.startTime, style: TextStyle(color: Theme.of(context).hintColor)),
+            ],
+          ),
+          const Divider(height: 32),
+          const Text('ASSIGNED MOVERS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.stormyLight, letterSpacing: 1)),
+          const SizedBox(height: 12),
+          assignmentsAsync.when(
+            loading: () => const LinearProgressIndicator(),
+            error: (e, _) => Text('Error: $e'),
+            data: (assignments) {
+              if (assignments.isEmpty) return Text('No movers assigned yet.', style: TextStyle(fontSize: 13, color: Theme.of(context).hintColor));
+              return Column(
+                children: assignments.map((a) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _MoverStatusRow(assignment: a),
+                )).toList(),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          assignmentsAsync.when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+            data: (assignments) {
+              final hasRejected = assignments.any((a) => a.status == AssignmentStatus.rejected);
+              final buttonText = assignments.isEmpty ? 'ASSIGN MOVERS' : hasRejected ? 'REASSIGN / ADD MOVERS' : 'ASSIGN MORE MOVERS';
+              return ElevatedButton.icon(
+                onPressed: () => _openMoverSelection(context: context, ref: ref, existingAssignments: assignments),
+                icon: const Icon(Icons.person_add_alt_1_rounded),
+                label: Text(buttonText),
+              );
+            },
+          ),
+        ],
       ),
     );
-  }
-
-  static String _formatDate(DateTime date) {
-    return '${date.day}/'
-        '${date.month}/'
-        '${date.year}';
-  }
-
-  static String _formatTime(String time) {
-    final parts = time.split(':');
-
-    if (parts.length < 2) {
-      return time;
-    }
-
-    final hour = int.tryParse(parts[0]);
-
-    final minute = int.tryParse(parts[1]);
-
-    if (hour == null || minute == null) {
-      return time;
-    }
-
-    final suffix = hour >= 12 ? 'PM' : 'AM';
-
-    final displayHour = hour == 0
-        ? 12
-        : hour > 12
-        ? hour - 12
-        : hour;
-
-    return '$displayHour:'
-        '${minute.toString().padLeft(2, '0')} '
-        '$suffix';
   }
 }
 
@@ -541,12 +418,12 @@ class _MoverStatusRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7F8FA),
-        borderRadius: BorderRadius.circular(10),
+        color: AppColors.tealPrimary.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.tealPrimary.withOpacity(0.1)),
       ),
       child: InkWell(
         onTap: () {
-          // We need to convert AdminMoverAssignment to MoverProfile
           final mover = MoverProfile(
             id: assignment.moverId,
             employeeCode: assignment.employeeCode,
@@ -560,32 +437,18 @@ class _MoverStatusRow extends StatelessWidget {
         },
         child: Row(
           children: [
-            const CircleAvatar(
+            CircleAvatar(
               radius: 18,
-              backgroundColor: Color(0xFFD7E6F7),
-              child: Icon(
-                Icons.person_outline_rounded,
-                size: 20,
-                color: Color(0xFF1E56A0),
-              ),
+              backgroundColor: AppColors.tealPrimary.withOpacity(0.1),
+              child: const Icon(Icons.person_outline_rounded, size: 20, color: AppColors.tealPrimary),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    assignment.fullName,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    assignment.employeeCode,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF5C6470),
-                    ),
-                  ),
+                  Text(assignment.fullName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  Text(assignment.employeeCode, style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -597,54 +460,29 @@ class _MoverStatusRow extends StatelessWidget {
   }
 }
 
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
+class _AddressRow extends StatelessWidget {
+  const _AddressRow({required this.icon, required this.address, required this.label});
   final IconData icon;
+  final String address;
   final String label;
-  final String value;
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 20, color: const Color(0xFF1E56A0)),
-        const SizedBox(width: 10),
+        Icon(icon, size: 22, color: AppColors.tealPrimary),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                label,
-                style: const TextStyle(fontSize: 12, color: Color(0xFF5C6470)),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Theme.of(context).hintColor)),
+              Text(address, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
             ],
           ),
         ),
       ],
     );
-  }
-}
-
-class _LoadingView extends StatelessWidget {
-  const _LoadingView();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(child: CircularProgressIndicator());
   }
 }
 
@@ -673,41 +511,6 @@ class _EmptyView extends StatelessWidget {
         Text(
           'Approved or assigned jobs that can receive movers will appear here.',
           textAlign: TextAlign.center,
-        ),
-      ],
-    );
-  }
-}
-
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(24),
-      children: [
-        const SizedBox(height: 120),
-        const Icon(Icons.error_outline_rounded, size: 52),
-        const SizedBox(height: 12),
-        const Text(
-          'Could not load assignment data',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        Text(message, textAlign: TextAlign.center),
-        const SizedBox(height: 16),
-        Center(
-          child: FilledButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Try Again'),
-          ),
         ),
       ],
     );

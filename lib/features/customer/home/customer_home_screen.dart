@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/status_enums.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/job_status_chip.dart';
+import '../../../core/widgets/premium_card.dart';
 import '../../../core/widgets/sort_button.dart';
 import '../../../data/models/job.dart';
 import '../../../providers/auth_providers.dart';
 import '../../../providers/customer_job_providers.dart';
+import '../../../providers/theme_provider.dart';
 import '../request/create_request_screen.dart';
 import '../request/job_details_screen.dart';
 
@@ -19,123 +22,75 @@ class CustomerHomeScreen extends ConsumerStatefulWidget {
 
 class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
   SortOrder _sortOrder = SortOrder.descending;
+  int _currentIndex = 0;
 
   @override
   Widget build(BuildContext context) {
     final jobsAsync = ref.watch(myJobsProvider);
+    final themeMode = ref.watch(themeModeProvider);
+    final isDark = themeMode == ThemeMode.dark;
 
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF7F8FA),
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.white,
-          title: const Text(
-            'MoveCrew Customer',
-            style: TextStyle(fontWeight: FontWeight.w600),
-          ),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Active Requests'),
-              Tab(text: 'Move History'),
-            ],
-          ),
-          actions: [
-            IconButton(
-              tooltip: 'Logout',
-              onPressed: () => _confirmLogout(context, ref),
-              icon: const Icon(Icons.logout_rounded),
-            ),
-            const SizedBox(width: 8),
-          ],
-        ),
-        body: TabBarView(
+    return Scaffold(
+      extendBody: true,
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            RefreshIndicator(
-              onRefresh: () async {
-                ref.invalidate(myJobsProvider);
-                await ref.read(myJobsProvider.future);
-              },
-              child: jobsAsync.when(
-                loading: () => const _LoadingView(),
-                error: (error, stackTrace) => _ErrorView(
-                  message: error.toString(),
-                  onRetry: () {
-                    ref.invalidate(myJobsProvider);
-                  },
-                ),
-                data: (jobs) {
-                  final activeJobs = jobs.where((j) => j.status != JobStatus.completed && j.status != JobStatus.rejected).toList();
-                  if (activeJobs.isEmpty) {
-                    return const _EmptyView();
-                  }
-                  return _JobList(jobs: activeJobs);
-                },
+            Text(
+              'MoveCrew',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 24,
+                color: isDark ? Colors.white : AppColors.obsidianDark,
               ),
             ),
-            RefreshIndicator(
-              onRefresh: () async {
-                ref.invalidate(myJobsProvider);
-                await ref.read(myJobsProvider.future);
-              },
-              child: jobsAsync.when(
-                loading: () => const _LoadingView(),
-                error: (error, stackTrace) => _ErrorView(
-                  message: error.toString(),
-                  onRetry: () {
-                    ref.invalidate(myJobsProvider);
-                  },
-                ),
-                data: (jobs) {
-                  final historyJobs = jobs.where((j) => j.status == JobStatus.completed || j.status == JobStatus.rejected).toList();
-                  if (historyJobs.isEmpty) {
-                    return const Center(child: Text('No move history yet.'));
-                  }
-
-                  final sorted = List<Job>.from(historyJobs);
-                  if (_sortOrder == SortOrder.descending) {
-                    sorted.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-                  } else {
-                    sorted.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-                  }
-
-                  return Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            SortButton(
-                              currentOrder: _sortOrder,
-                              onChanged: (order) => setState(() => _sortOrder = order),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Expanded(child: _JobList(jobs: sorted)),
-                    ],
-                  );
-                },
+            Text(
+              'Premium Moving Services',
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? Colors.white60 : Colors.black54,
+                letterSpacing: 0.5,
               ),
             ),
           ],
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          backgroundColor: const Color(0xFF1E56A0),
-          foregroundColor: Colors.white,
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const CreateRequestScreen(),
-              ),
-            );
-          },
-          icon: const Icon(Icons.add_rounded),
-          label: const Text('New Request'),
-        ),
+        actions: [
+          IconButton(
+            onPressed: () {
+              ref.read(themeModeProvider.notifier).toggle();
+            },
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+          ),
+          IconButton(
+            tooltip: 'Logout',
+            onPressed: () => _confirmLogout(context, ref),
+            icon: const Icon(Icons.logout_rounded),
+          ),
+          const SizedBox(width: 8),
+        ],
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
+      body: _currentIndex == 0
+          ? _ActiveRequestsTab(jobsAsync: jobsAsync)
+          : _HistoryTab(jobsAsync: jobsAsync, sortOrder: _sortOrder, onSortChanged: (o) => setState(() => _sortOrder = o)),
+      bottomNavigationBar: _PremiumBottomNav(
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: AppColors.tealPrimary,
+        foregroundColor: Colors.white,
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const CreateRequestScreen(),
+            ),
+          );
+        },
+        child: const Icon(Icons.add_rounded),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
   }
 
@@ -148,15 +103,11 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
           content: const Text('Are you sure you want to sign out of MoveCrew?'),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(false);
-              },
+              onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(true);
-              },
+              onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('Sign Out'),
             ),
           ],
@@ -164,55 +115,219 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
       },
     );
 
-    if (shouldLogout != true) {
-      return;
+    if (shouldLogout == true) {
+      await ref.read(authRepositoryProvider).signOut();
     }
-
-    await ref.read(authRepositoryProvider).signOut();
   }
 }
 
-class _LoadingView extends StatelessWidget {
-  const _LoadingView();
+class _ActiveRequestsTab extends ConsumerWidget {
+  const _ActiveRequestsTab({required this.jobsAsync});
+  final AsyncValue<List<Job>> jobsAsync;
 
   @override
-  Widget build(BuildContext context) {
-    return const Center(child: CircularProgressIndicator());
+  Widget build(BuildContext context, WidgetRef ref) {
+    return RefreshIndicator(
+      onRefresh: () => ref.refresh(myJobsProvider.future),
+      child: jobsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => _ErrorView(message: error.toString(), onRetry: () => ref.invalidate(myJobsProvider)),
+        data: (jobs) {
+          final activeJobs = jobs.where((j) => j.status != JobStatus.completed && j.status != JobStatus.rejected).toList();
+          if (activeJobs.isEmpty) return const _EmptyView();
+          return _JobList(jobs: activeJobs);
+        },
+      ),
+    );
   }
 }
 
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message, required this.onRetry});
+class _HistoryTab extends ConsumerWidget {
+  const _HistoryTab({required this.jobsAsync, required this.sortOrder, required this.onSortChanged});
+  final AsyncValue<List<Job>> jobsAsync;
+  final SortOrder sortOrder;
+  final Function(SortOrder) onSortChanged;
 
-  final String message;
-  final VoidCallback onRetry;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return RefreshIndicator(
+      onRefresh: () => ref.refresh(myJobsProvider.future),
+      child: jobsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => _ErrorView(message: error.toString(), onRetry: () => ref.invalidate(myJobsProvider)),
+        data: (jobs) {
+          final historyJobs = jobs.where((j) => j.status == JobStatus.completed || j.status == JobStatus.rejected).toList();
+          if (historyJobs.isEmpty) return const Center(child: Text('No move history yet.'));
+
+          final sorted = List<Job>.from(historyJobs);
+          sorted.sort((a, b) => sortOrder == SortOrder.descending
+              ? b.createdAt.compareTo(a.createdAt)
+              : a.createdAt.compareTo(b.createdAt));
+
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Move History', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    SortButton(currentOrder: sortOrder, onChanged: onSortChanged),
+                  ],
+                ),
+              ),
+              Expanded(child: _JobList(jobs: sorted)),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _PremiumBottomNav extends StatelessWidget {
+  const _PremiumBottomNav({required this.currentIndex, required this.onTap});
+  final int currentIndex;
+  final ValueChanged<int> onTap;
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(24),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+      height: 70,
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.cardDark : Colors.white,
+        borderRadius: BorderRadius.circular(35),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _NavItem(
+            icon: Icons.home_rounded,
+            label: 'Home',
+            isActive: currentIndex == 0,
+            onTap: () => onTap(0),
+          ),
+          const SizedBox(width: 40), // Space for FAB
+          _NavItem(
+            icon: Icons.history_rounded,
+            label: 'History',
+            isActive: currentIndex == 1,
+            onTap: () => onTap(1),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  const _NavItem({required this.icon, required this.label, required this.isActive, required this.onTap});
+  final IconData icon;
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isActive ? AppColors.tealPrimary : Colors.grey;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 28),
+          const SizedBox(height: 4),
+          Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: isActive ? FontWeight.bold : FontWeight.normal)),
+        ],
+      ),
+    );
+  }
+}
+
+class _JobList extends StatelessWidget {
+  const _JobList({required this.jobs});
+  final List<Job> jobs;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 120),
+      itemCount: jobs.length,
+      itemBuilder: (context, index) => _JobCard(job: jobs[index]),
+    );
+  }
+}
+
+class _JobCard extends StatelessWidget {
+  const _JobCard({required this.job});
+  final Job job;
+
+  @override
+  Widget build(BuildContext context) {
+    return PremiumCard(
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => CustomerJobDetailsScreen(jobId: job.id))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(job.jobCode, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              JobStatusChip(status: job.status),
+            ],
+          ),
+          const SizedBox(height: 20),
+          _LocationRow(icon: Icons.trip_origin_rounded, address: job.pickupAddress, label: 'PICKUP'),
+          const Padding(
+            padding: EdgeInsets.only(left: 11, top: 4, bottom: 4),
+            child: SizedBox(height: 20, child: VerticalDivider(thickness: 2, width: 1)),
+          ),
+          _LocationRow(icon: Icons.location_on_rounded, address: job.destinationAddress, label: 'DESTINATION'),
+          const Divider(height: 32),
+          Row(
+            children: [
+              Icon(Icons.calendar_today_rounded, size: 16, color: Theme.of(context).hintColor),
+              const SizedBox(width: 8),
+              Text(job.moveDate.toString().split(' ')[0], style: TextStyle(color: Theme.of(context).hintColor)),
+              const Spacer(),
+              const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.tealPrimary),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LocationRow extends StatelessWidget {
+  const _LocationRow({required this.icon, required this.address, required this.label});
+  final IconData icon;
+  final String address;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
       children: [
-        const SizedBox(height: 120),
-        const Icon(Icons.error_outline_rounded, size: 56),
-        const SizedBox(height: 16),
-        const Text(
-          'Could not load requests',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          message,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: Color(0xFF5C6470)),
-        ),
-        const SizedBox(height: 20),
-        Center(
-          child: FilledButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Try Again'),
+        Icon(icon, size: 22, color: AppColors.tealPrimary),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.grey, letterSpacing: 1)),
+              Text(address, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
+            ],
           ),
         ),
       ],
@@ -222,233 +337,43 @@ class _ErrorView extends StatelessWidget {
 
 class _EmptyView extends StatelessWidget {
   const _EmptyView();
-
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      children: const [
-        SizedBox(height: 170),
-        Icon(Icons.local_shipping_outlined, size: 72, color: Color(0xFF9AA5B1)),
-        SizedBox(height: 20),
-        Text(
-          'No move requests yet',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF1A1E23),
-          ),
-        ),
-        SizedBox(height: 8),
-        Text(
-          'Create your first moving request using the New Request button.',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 15, height: 1.5, color: Color(0xFF5C6470)),
-        ),
-      ],
-    );
-  }
-}
-
-class _JobList extends StatelessWidget {
-  const _JobList({required this.jobs});
-
-  final List<Job> jobs;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView.separated(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-      itemCount: jobs.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
-      itemBuilder: (context, index) {
-        return _JobCard(job: jobs[index]);
-      },
-    );
-  }
-}
-
-class _JobCard extends StatelessWidget {
-  const _JobCard({required this.job});
-
-  final Job job;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: EdgeInsets.zero,
-      color: Colors.white,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Color(0xFFE2E5EA)),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => CustomerJobDetailsScreen(jobId: job.id),
-            ),
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      job.jobCode,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF1A1E23),
-                      ),
-                    ),
-                  ),
-                  JobStatusChip(status: job.status),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _AddressRow(
-                icon: Icons.trip_origin_rounded,
-                label: 'Pickup',
-                address: job.pickupAddress,
-              ),
-              const SizedBox(height: 12),
-              _AddressRow(
-                icon: Icons.location_on_outlined,
-                label: 'Destination',
-                address: job.destinationAddress,
-              ),
-              const Divider(height: 28),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.calendar_today_outlined,
-                    size: 18,
-                    color: Color(0xFF5C6470),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _formatDate(job.moveDate),
-                    style: const TextStyle(color: Color(0xFF5C6470)),
-                  ),
-                  const Spacer(),
-                  const Icon(
-                    Icons.access_time_rounded,
-                    size: 18,
-                    color: Color(0xFF5C6470),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    _formatTime(job.startTime),
-                    style: const TextStyle(color: Color(0xFF5C6470)),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.local_shipping_outlined, size: 100, color: Colors.grey.withOpacity(0.3)),
+          const SizedBox(height: 24),
+          const Text('No move requests yet', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          const Text('Your next move starts here.', style: TextStyle(color: Colors.grey)),
+        ],
       ),
     );
   }
-
-  static String _formatDate(DateTime date) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-
-    return '${date.day} '
-        '${months[date.month - 1]} '
-        '${date.year}';
-  }
-
-  static String _formatTime(String time) {
-    final parts = time.split(':');
-
-    if (parts.length < 2) {
-      return time;
-    }
-
-    final hour = int.tryParse(parts[0]);
-
-    final minute = int.tryParse(parts[1]);
-
-    if (hour == null || minute == null) {
-      return time;
-    }
-
-    final suffix = hour >= 12 ? 'PM' : 'AM';
-
-    final displayHour = hour == 0
-        ? 12
-        : hour > 12
-        ? hour - 12
-        : hour;
-
-    return '$displayHour:'
-        '${minute.toString().padLeft(2, '0')} '
-        '$suffix';
-  }
 }
 
-class _AddressRow extends StatelessWidget {
-  const _AddressRow({
-    required this.icon,
-    required this.label,
-    required this.address,
-  });
-
-  final IconData icon;
-  final String label;
-  final String address;
-
+class _ErrorView extends StatelessWidget {
+  const _ErrorView({required this.message, required this.onRetry});
+  final String message;
+  final VoidCallback onRetry;
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 20, color: const Color(0xFF1E56A0)),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(fontSize: 12, color: Color(0xFF5C6470)),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                address,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF1A1E23),
-                ),
-              ),
-            ],
-          ),
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline_rounded, size: 64, color: AppColors.crimsonRed),
+            const SizedBox(height: 16),
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 24),
+            ElevatedButton(onPressed: onRetry, child: const Text('Retry')),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

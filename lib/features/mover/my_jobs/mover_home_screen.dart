@@ -2,98 +2,79 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/status_enums.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/job_status_chip.dart';
+import '../../../core/widgets/premium_card.dart';
 import '../../../data/models/assignment.dart';
 import '../../../providers/auth_providers.dart';
 import '../../../providers/mover_assignment_providers.dart';
+import '../../../providers/theme_provider.dart';
 import 'assignment_details_screen.dart';
 import '../reviews/mover_reviews_screen.dart';
 import '../history/mover_history_screen.dart';
 
-class MoverHomeScreen extends ConsumerWidget {
+class MoverHomeScreen extends ConsumerStatefulWidget {
   const MoverHomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MoverHomeScreen> createState() => _MoverHomeScreenState();
+}
+
+class _MoverHomeScreenState extends ConsumerState<MoverHomeScreen> {
+  int _currentIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
     final assignmentsAsync = ref.watch(myMoverAssignmentsProvider);
+    final isDark = ref.watch(themeModeProvider) == ThemeMode.dark;
 
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF7F8FA),
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.white,
-          title: const Text(
-            'MoveCrew Mover',
-            style: TextStyle(fontWeight: FontWeight.w600),
-          ),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'My Tasks'),
-              Tab(text: 'Work History'),
-            ],
-          ),
-          actions: [
-            IconButton(
-              tooltip: 'My Reviews',
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const MoverReviewsScreen()),
-                );
-              },
-              icon: const Icon(Icons.star_outline_rounded),
-            ),
-            IconButton(
-              tooltip: 'Logout',
-              onPressed: () => _confirmLogout(context, ref),
-              icon: const Icon(Icons.logout_rounded),
-            ),
-            const SizedBox(width: 8),
-          ],
-        ),
-        body: TabBarView(
+    return Scaffold(
+      extendBody: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            RefreshIndicator(
-              onRefresh: () async {
-                ref.invalidate(myMoverAssignmentsProvider);
-                await ref.read(myMoverAssignmentsProvider.future);
-              },
-              child: assignmentsAsync.when(
-                loading: () => const _LoadingView(),
-                error: (error, stackTrace) => _ErrorView(
-                  message: error.toString(),
-                  onRetry: () {
-                    ref.invalidate(myMoverAssignmentsProvider);
-                  },
-                ),
-                data: (assignments) {
-                  // Filter out completed jobs from "My Tasks"
-                  // Assignments are joined with jobs in getMyAssignments update (coming next)
-                  // For now we'll just check if job.status is completed if available, 
-                  // but we'll update the repository to be cleaner.
-                  
-                  final activeAssignments = assignments.where((a) => a.status != AssignmentStatus.rejected).toList();
-                  
-                  if (activeAssignments.isEmpty) {
-                    return const _EmptyView();
-                  }
-
-                  return ListView.separated(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-                    itemCount: activeAssignments.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      return _AssignmentCard(assignment: activeAssignments[index]);
-                    },
-                  );
-                },
+            Text(
+              'MoveCrew Mover',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 22,
+                color: isDark ? Colors.white : AppColors.obsidianDark,
               ),
             ),
-            const MoverHistoryScreen(),
+            const Text(
+              'Job Dashboard',
+              style: TextStyle(fontSize: 12, color: AppColors.stormyLight, letterSpacing: 1),
+            ),
           ],
         ),
+        actions: [
+          IconButton(
+            onPressed: () {
+              ref.read(themeModeProvider.notifier).toggle();
+            },
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+          ),
+          IconButton(
+            tooltip: 'My Reviews',
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MoverReviewsScreen())),
+            icon: const Icon(Icons.star_rounded, color: AppColors.tealPrimary),
+          ),
+          IconButton(
+            tooltip: 'Logout',
+            onPressed: () => _confirmLogout(context, ref),
+            icon: const Icon(Icons.logout_rounded),
+          ),
+          const SizedBox(width: 8),
+        ],
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: _currentIndex == 0 ? _TasksTab(assignmentsAsync: assignmentsAsync) : const MoverHistoryScreen(),
+      bottomNavigationBar: _MoverBottomNav(
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
       ),
     );
   }
@@ -101,41 +82,49 @@ class MoverHomeScreen extends ConsumerWidget {
   Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
     final shouldLogout = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Sign out?'),
-          content: const Text(
-            'Are you sure you want to sign out of MoveCrew Mover?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(false);
-              },
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(true);
-              },
-              child: const Text('Sign Out'),
-            ),
-          ],
-        );
-      },
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Sign out?'),
+        content: const Text('Are you sure you want to sign out of MoveCrew Mover?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(dialogContext).pop(true), child: const Text('Sign Out')),
+        ],
+      ),
     );
 
-    if (shouldLogout != true) {
-      return;
+    if (shouldLogout == true) {
+      await ref.read(authRepositoryProvider).signOut();
     }
+  }
+}
 
-    await ref.read(authRepositoryProvider).signOut();
+class _TasksTab extends ConsumerWidget {
+  const _TasksTab({required this.assignmentsAsync});
+  final AsyncValue<List<Assignment>> assignmentsAsync;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return RefreshIndicator(
+      onRefresh: () => ref.refresh(myMoverAssignmentsProvider.future),
+      child: assignmentsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => _ErrorView(message: error.toString(), onRetry: () => ref.invalidate(myMoverAssignmentsProvider)),
+        data: (assignments) {
+          final activeAssignments = assignments.where((a) => a.status != AssignmentStatus.rejected).toList();
+          if (activeAssignments.isEmpty) return const _EmptyView();
+          return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
+            itemCount: activeAssignments.length,
+            itemBuilder: (context, index) => _AssignmentCard(assignment: activeAssignments[index]),
+          );
+        },
+      ),
+    );
   }
 }
 
 class _AssignmentCard extends ConsumerWidget {
   const _AssignmentCard({required this.assignment});
-
   final Assignment assignment;
 
   @override
@@ -143,208 +132,76 @@ class _AssignmentCard extends ConsumerWidget {
     final jobAsync = ref.watch(moverAssignedJobProvider(assignment.jobId));
 
     return jobAsync.when(
-      loading: () => const Card(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Center(child: CircularProgressIndicator()),
-        ),
-      ),
-      error: (error, stackTrace) => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text('Could not load assigned job: $error'),
-        ),
-      ),
-      data: (job) {
-        return Card(
-          margin: EdgeInsets.zero,
-          elevation: 0,
-          color: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: const BorderSide(color: Color(0xFFE2E5EA)),
-          ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) =>
-                      MoverAssignmentDetailsScreen(assignment: assignment),
-                ),
-              );
-            },
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          job.jobCode,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      _AssignmentStatusChip(
-                        assignmentStatus: assignment.status,
-                        jobStatus: job.status,
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  _InfoRow(
-                    icon: Icons.trip_origin_rounded,
-                    label: 'Pickup',
-                    value: job.pickupAddress,
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  _InfoRow(
-                    icon: Icons.location_on_outlined,
-                    label: 'Destination',
-                    value: job.destinationAddress,
-                  ),
-
-                  const Divider(height: 28),
-
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.calendar_today_outlined,
-                        size: 18,
-                        color: Color(0xFF5C6470),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(_formatDate(job.moveDate)),
-                      const Spacer(),
-                      const Icon(
-                        Icons.access_time_rounded,
-                        size: 18,
-                        color: Color(0xFF5C6470),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(_formatTime(job.startTime)),
-                    ],
-                  ),
-                ],
-              ),
+      loading: () => const PremiumCard(child: Center(child: CircularProgressIndicator())),
+      error: (error, _) => PremiumCard(child: Text('Error: $error')),
+      data: (job) => PremiumCard(
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => MoverAssignmentDetailsScreen(assignment: assignment))),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(job.jobCode, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                _StatusBadge(assignmentStatus: assignment.status, jobStatus: job.status),
+              ],
             ),
-          ),
-        );
-      },
+            const SizedBox(height: 20),
+            _AddressItem(icon: Icons.trip_origin_rounded, address: job.pickupAddress, label: 'PICKUP'),
+            const Padding(
+              padding: EdgeInsets.only(left: 11, top: 4, bottom: 4),
+              child: SizedBox(height: 20, child: VerticalDivider(thickness: 2, width: 1)),
+            ),
+            _AddressItem(icon: Icons.location_on_rounded, address: job.destinationAddress, label: 'DESTINATION'),
+            const Divider(height: 32),
+            Row(
+              children: [
+                Icon(Icons.calendar_today_rounded, size: 16, color: Theme.of(context).hintColor),
+                const SizedBox(width: 8),
+                Text(job.moveDate.toString().split(' ')[0], style: TextStyle(color: Theme.of(context).hintColor)),
+                const Spacer(),
+                const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.tealPrimary),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
-  }
-
-  static String _formatDate(DateTime date) {
-    return '${date.day}/'
-        '${date.month}/'
-        '${date.year}';
-  }
-
-  static String _formatTime(String time) {
-    final parts = time.split(':');
-
-    if (parts.length < 2) {
-      return time;
-    }
-
-    final hour = int.tryParse(parts[0]);
-
-    final minute = int.tryParse(parts[1]);
-
-    if (hour == null || minute == null) {
-      return time;
-    }
-
-    final suffix = hour >= 12 ? 'PM' : 'AM';
-
-    final displayHour = hour == 0
-        ? 12
-        : hour > 12
-        ? hour - 12
-        : hour;
-
-    return '$displayHour:'
-        '${minute.toString().padLeft(2, '0')} '
-        '$suffix';
   }
 }
 
-class _AssignmentStatusChip extends StatelessWidget {
-  const _AssignmentStatusChip({
-    required this.assignmentStatus,
-    required this.jobStatus,
-  });
-
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.assignmentStatus, required this.jobStatus});
   final AssignmentStatus assignmentStatus;
   final JobStatus jobStatus;
 
   @override
   Widget build(BuildContext context) {
-    if (assignmentStatus == AssignmentStatus.accepted &&
-        jobStatus == JobStatus.inProgress) {
-      return const JobStatusChip(status: JobStatus.inProgress);
-    } else if (assignmentStatus == AssignmentStatus.accepted &&
-        jobStatus == JobStatus.completed) {
-      return const JobStatusChip(status: JobStatus.completed);
-    } else {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (assignmentStatus == AssignmentStatus.rejected)
-            const Padding(
-              padding: EdgeInsets.only(right: 8),
-              child: AssignmentStatusChip(status: AssignmentStatus.rejected),
-            ),
-          JobStatusChip(status: jobStatus),
-        ],
-      );
+    if (assignmentStatus == AssignmentStatus.pending) {
+      return const AssignmentStatusChip(status: AssignmentStatus.pending);
     }
+    return JobStatusChip(status: jobStatus);
   }
 }
 
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
+class _AddressItem extends StatelessWidget {
+  const _AddressItem({required this.icon, required this.address, required this.label});
   final IconData icon;
+  final String address;
   final String label;
-  final String value;
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 20, color: const Color(0xFF1E56A0)),
-        const SizedBox(width: 10),
+        Icon(icon, size: 22, color: AppColors.tealPrimary),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                label,
-                style: const TextStyle(fontSize: 12, color: Color(0xFF5C6470)),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Theme.of(context).hintColor, letterSpacing: 1)),
+              Text(address, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
             ],
           ),
         ),
@@ -353,73 +210,96 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-class _LoadingView extends StatelessWidget {
-  const _LoadingView();
+class _MoverBottomNav extends StatelessWidget {
+  const _MoverBottomNav({required this.currentIndex, required this.onTap});
+  final int currentIndex;
+  final ValueChanged<int> onTap;
 
   @override
   Widget build(BuildContext context) {
-    return const Center(child: CircularProgressIndicator());
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(30, 0, 30, 25),
+      height: 65,
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.cardDark : Colors.white,
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, 5))],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _MoverNavItem(icon: Icons.work_rounded, label: 'Jobs', isActive: currentIndex == 0, onTap: () => onTap(0)),
+          _MoverNavItem(icon: Icons.history_rounded, label: 'History', isActive: currentIndex == 1, onTap: () => onTap(1)),
+        ],
+      ),
+    );
+  }
+}
+
+class _MoverNavItem extends StatelessWidget {
+  const _MoverNavItem({required this.icon, required this.label, required this.isActive, required this.onTap});
+  final IconData icon;
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isActive ? AppColors.tealPrimary : Colors.grey;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 26),
+          const SizedBox(height: 2),
+          Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: isActive ? FontWeight.bold : FontWeight.normal)),
+        ],
+      ),
+    );
   }
 }
 
 class _EmptyView extends StatelessWidget {
   const _EmptyView();
-
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      children: const [
-        SizedBox(height: 170),
-        Icon(Icons.local_shipping_outlined, size: 72, color: Color(0xFF9AA5B1)),
-        SizedBox(height: 20),
-        Text(
-          'No assigned jobs',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
-        ),
-        SizedBox(height: 8),
-        Text(
-          'Jobs assigned to you will appear here.',
-          textAlign: TextAlign.center,
-        ),
-      ],
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.assignment_turned_in_outlined, size: 80, color: Colors.grey.withOpacity(0.3)),
+          const SizedBox(height: 16),
+          const Text('All clear!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text('New jobs will appear here.', style: TextStyle(color: Colors.grey)),
+        ],
+      ),
     );
   }
 }
 
 class _ErrorView extends StatelessWidget {
   const _ErrorView({required this.message, required this.onRetry});
-
   final String message;
   final VoidCallback onRetry;
-
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(24),
-      children: [
-        const SizedBox(height: 120),
-        const Icon(Icons.error_outline_rounded, size: 52),
-        const SizedBox(height: 12),
-        const Text(
-          'Could not load jobs',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600),
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline_rounded, size: 50, color: AppColors.crimsonRed),
+            const SizedBox(height: 16),
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 20),
+            ElevatedButton(onPressed: onRetry, child: const Text('Retry')),
+          ],
         ),
-        const SizedBox(height: 8),
-        Text(message, textAlign: TextAlign.center),
-        const SizedBox(height: 16),
-        Center(
-          child: FilledButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Try Again'),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

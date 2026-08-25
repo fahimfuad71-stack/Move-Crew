@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/status_enums.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/job_status_chip.dart';
+import '../../../core/widgets/premium_card.dart';
 import '../../../data/models/job.dart';
-import '../../../data/models/job_item.dart';
 import '../../../providers/admin_job_providers.dart';
+import '../../../providers/theme_provider.dart';
 
 class IncomingRequestDetailsScreen extends ConsumerStatefulWidget {
   const IncomingRequestDetailsScreen({required this.jobId, super.key});
@@ -13,12 +15,10 @@ class IncomingRequestDetailsScreen extends ConsumerStatefulWidget {
   final String jobId;
 
   @override
-  ConsumerState<IncomingRequestDetailsScreen> createState() =>
-      _IncomingRequestDetailsScreenState();
+  ConsumerState<IncomingRequestDetailsScreen> createState() => _IncomingRequestDetailsScreenState();
 }
 
-class _IncomingRequestDetailsScreenState
-    extends ConsumerState<IncomingRequestDetailsScreen> {
+class _IncomingRequestDetailsScreenState extends ConsumerState<IncomingRequestDetailsScreen> {
   bool _processing = false;
 
   Future<void> _review({required Job job, required bool approve}) async {
@@ -31,27 +31,19 @@ class _IncomingRequestDetailsScreenState
           title: Text('$action request?'),
           content: Text(
             approve
-                ? 'Approve ${job.jobCode}? '
-                      'The request will move to APPROVED status.'
-                : 'Reject ${job.jobCode}? '
-                      'The request will move to REJECTED status.',
+                ? 'Approve ${job.jobCode}? The request will move to APPROVED status.'
+                : 'Reject ${job.jobCode}? The request will move to REJECTED status.',
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(false);
-              },
+              onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('Cancel'),
             ),
             FilledButton(
               style: FilledButton.styleFrom(
-                backgroundColor: approve
-                    ? const Color(0xFF2E9E5B)
-                    : const Color(0xFFD64545),
+                backgroundColor: approve ? AppColors.tealPrimary : AppColors.crimsonRed,
               ),
-              onPressed: () {
-                Navigator.of(dialogContext).pop(true);
-              },
+              onPressed: () => Navigator.of(dialogContext).pop(true),
               child: Text(action),
             ),
           ],
@@ -59,28 +51,18 @@ class _IncomingRequestDetailsScreenState
       },
     );
 
-    if (confirmed != true) {
-      return;
-    }
+    if (confirmed != true) return;
 
-    setState(() {
-      _processing = true;
-    });
+    setState(() => _processing = true);
 
     try {
       final repository = ref.read(adminJobRepositoryProvider);
-
-      final result = approve
-          ? await repository.approveRequest(job.id)
-          : await repository.rejectRequest(job.id);
+      approve ? await repository.approveRequest(job.id) : await repository.rejectRequest(job.id);
 
       ref.invalidate(incomingAdminRequestsProvider);
-
       ref.invalidate(adminRequestProvider(job.id));
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       await showDialog<void>(
         context: context,
@@ -88,219 +70,175 @@ class _IncomingRequestDetailsScreenState
         builder: (dialogContext) {
           return AlertDialog(
             icon: Icon(
-              approve
-                  ? Icons.check_circle_outline_rounded
-                  : Icons.cancel_outlined,
+              approve ? Icons.check_circle_outline_rounded : Icons.cancel_outlined,
               size: 48,
-              color: approve
-                  ? const Color(0xFF2E9E5B)
-                  : const Color(0xFFD64545),
+              color: approve ? AppColors.tealPrimary : AppColors.crimsonRed,
             ),
             title: Text(approve ? 'Request Approved' : 'Request Rejected'),
-            content: Text(
-              '${result.jobCode} is now '
-              '${result.newStatus.value}.',
-            ),
+            content: Text('${job.jobCode} has been ${approve ? 'approved' : 'rejected'}.'),
             actions: [
               FilledButton(
-                onPressed: () {
-                  Navigator.of(dialogContext).pop();
-                },
+                onPressed: () => Navigator.of(dialogContext).pop(),
                 child: const Text('Done'),
               ),
             ],
           );
         },
       );
-
-      if (!mounted) {
-        return;
-      }
-
-      Navigator.of(context).pop();
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not review request: $error')),
-      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $error')));
     } finally {
-      if (mounted) {
-        setState(() {
-          _processing = false;
-        });
-      }
+      if (mounted) setState(() => _processing = false);
     }
   }
 
   Future<void> _refresh(Job job) async {
     ref.invalidate(adminRequestProvider(job.id));
-
     ref.invalidate(adminRequestItemsProvider(job.id));
-
     ref.invalidate(adminCustomerProvider(job.customerId));
-
     await ref.read(adminRequestProvider(job.id).future);
   }
 
   @override
   Widget build(BuildContext context) {
     final jobAsync = ref.watch(adminRequestProvider(widget.jobId));
+    final isDark = ref.watch(themeModeProvider) == ThemeMode.dark;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-        title: const Text(
-          'Incoming Request',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
+        title: const Text('Review Request', style: TextStyle(fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+            onPressed: () => ref.read(themeModeProvider.notifier).toggle(),
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+          ),
+          const SizedBox(width: 8),
+        ],
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
       body: jobAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => _ErrorView(
-          message: error.toString(),
-          onRetry: () {
-            ref.invalidate(adminRequestProvider(widget.jobId));
-          },
-        ),
+        error: (error, _) => Center(child: Text(error.toString())),
         data: (job) {
-          final customerAsync = ref.watch(
-            adminCustomerProvider(job.customerId),
-          );
-
+          final customerAsync = ref.watch(adminCustomerProvider(job.customerId));
           final itemsAsync = ref.watch(adminRequestItemsProvider(job.id));
 
           return RefreshIndicator(
             onRefresh: () => _refresh(job),
             child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               children: [
                 _HeaderCard(job: job),
-
                 const SizedBox(height: 16),
-
-                _SectionCard(
-                  title: 'Customer',
-                  child: customerAsync.when(
-                    loading: () =>
-                        const Center(child: CircularProgressIndicator()),
-                    error: (error, stackTrace) =>
-                        Text('Could not load customer: $error'),
-                    data: (customer) {
-                      final phone = customer.phone?.trim();
-
-                      return Column(
-                        children: [
-                          _InfoRow(
-                            icon: Icons.person_outline_rounded,
-                            label: 'Name',
-                            value: customer.fullName,
+                customerAsync.when(
+                  loading: () => const LinearProgressIndicator(),
+                  error: (e, _) => Text('Error: $e'),
+                  data: (user) => PremiumCard(
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: AppColors.tealPrimary.withOpacity(0.1),
+                          child: const Icon(Icons.person_rounded, color: AppColors.tealPrimary),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(user.fullName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                              Text(user.phone ?? 'No phone', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                            ],
                           ),
-                          const Divider(height: 28),
-                          _InfoRow(
-                            icon: Icons.phone_outlined,
-                            label: 'Phone',
-                            value: phone == null || phone.isEmpty
-                                ? 'Not provided'
-                                : phone,
-                          ),
-                        ],
-                      );
-                    },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-
-                const SizedBox(height: 16),
-
-                _SectionCard(
-                  title: 'Move Information',
+                const SizedBox(height: 24),
+                const Text('MOVE INFORMATION', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.grey, letterSpacing: 1.5)),
+                const SizedBox(height: 12),
+                PremiumCard(
                   child: Column(
                     children: [
-                      _InfoRow(
-                        icon: Icons.trip_origin_rounded,
-                        label: 'Pickup',
-                        value: job.pickupAddress,
-                      ),
-                      const Divider(height: 28),
-                      _InfoRow(
-                        icon: Icons.location_on_outlined,
-                        label: 'Destination',
-                        value: job.destinationAddress,
-                      ),
-                      const Divider(height: 28),
-                      _InfoRow(
-                        icon: Icons.calendar_today_outlined,
-                        label: 'Move Date',
-                        value: _formatDate(job.moveDate),
-                      ),
-                      const Divider(height: 28),
-                      _InfoRow(
-                        icon: Icons.access_time_rounded,
-                        label: 'Start Time',
-                        value: _formatTime(job.startTime),
+                      _DetailRow(icon: Icons.trip_origin_rounded, label: 'PICKUP', value: job.pickupAddress),
+                      const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider()),
+                      _DetailRow(icon: Icons.location_on_rounded, label: 'DESTINATION', value: job.destinationAddress),
+                      const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider()),
+                      Row(
+                        children: [
+                          Expanded(child: _DetailRow(icon: Icons.calendar_today_rounded, label: 'DATE', value: job.moveDate.toString().split(' ')[0])),
+                          Expanded(child: _DetailRow(icon: Icons.access_time_rounded, label: 'TIME', value: job.startTime)),
+                        ],
                       ),
                     ],
                   ),
                 ),
-
-                const SizedBox(height: 16),
-
-                _SectionCard(
-                  title: 'Instructions',
-                  child: Text(
-                    job.instructions == null || job.instructions!.trim().isEmpty
-                        ? 'No special instructions provided.'
-                        : job.instructions!,
-                    style: const TextStyle(fontSize: 15, height: 1.5),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                _SectionCard(
-                  title: 'Moving Items',
-                  child: itemsAsync.when(
-                    loading: () =>
-                        const Center(child: CircularProgressIndicator()),
-                    error: (error, stackTrace) =>
-                        Text('Could not load items: $error'),
-                    data: (items) {
-                      if (items.isEmpty) {
-                        return const Text('No items found.');
-                      }
-
-                      return Column(
-                        children: List.generate(items.length, (index) {
-                          final item = items[index];
-
-                          return Column(
-                            children: [
-                              _ItemRow(item: item),
-                              if (index < items.length - 1)
-                                const Divider(height: 24),
-                            ],
-                          );
-                        }),
-                      );
-                    },
-                  ),
-                ),
-
                 const SizedBox(height: 24),
-
+                const Text('INSTRUCTIONS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.grey, letterSpacing: 1.5)),
+                const SizedBox(height: 12),
+                PremiumCard(
+                  child: Text(
+                    job.instructions == null || job.instructions!.trim().isEmpty ? 'No special instructions.' : job.instructions!,
+                    style: const TextStyle(fontSize: 14, height: 1.5),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const Text('MOVING ITEMS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.grey, letterSpacing: 1.5)),
+                const SizedBox(height: 12),
+                itemsAsync.when(
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (e, _) => Text('Error: $e'),
+                  data: (items) => PremiumCard(
+                    child: items.isEmpty
+                        ? const Text('No items listed.')
+                        : Column(
+                            children: List.generate(items.length, (i) {
+                              return Padding(
+                                padding: EdgeInsets.only(bottom: i == items.length - 1 ? 0 : 16),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.inventory_2_rounded, size: 20, color: AppColors.tealPrimary),
+                                    const SizedBox(width: 12),
+                                    Expanded(child: Text(items[i].name, style: const TextStyle(fontWeight: FontWeight.w500))),
+                                    Text('x${items[i].quantity}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              );
+                            }),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 32),
                 if (job.status == JobStatus.requested)
-                  _ReviewActions(
-                    processing: _processing,
-                    onApprove: () => _review(job: job, approve: true),
-                    onReject: () => _review(job: job, approve: false),
-                  )
-                else
-                  _AlreadyReviewed(status: job.status),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _processing ? null : () => _review(job: job, approve: false),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: AppColors.crimsonRed),
+                            foregroundColor: AppColors.crimsonRed,
+                            minimumSize: const Size(0, 56),
+                          ),
+                          child: const Text('REJECT'),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: _processing ? null : () => _review(job: job, approve: true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.tealPrimary,
+                            minimumSize: const Size(0, 56),
+                          ),
+                          child: const Text('APPROVE'),
+                        ),
+                      ),
+                    ],
+                  ),
+                const SizedBox(height: 40),
               ],
             ),
           );
@@ -308,162 +246,31 @@ class _IncomingRequestDetailsScreenState
       ),
     );
   }
-
-  static String _formatDate(DateTime date) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-
-    return '${date.day} '
-        '${months[date.month - 1]} '
-        '${date.year}';
-  }
-
-  static String _formatTime(String time) {
-    final parts = time.split(':');
-
-    if (parts.length < 2) {
-      return time;
-    }
-
-    final hour = int.tryParse(parts[0]);
-
-    final minute = int.tryParse(parts[1]);
-
-    if (hour == null || minute == null) {
-      return time;
-    }
-
-    final suffix = hour >= 12 ? 'PM' : 'AM';
-
-    final displayHour = hour == 0
-        ? 12
-        : hour > 12
-        ? hour - 12
-        : hour;
-
-    return '$displayHour:'
-        '${minute.toString().padLeft(2, '0')} '
-        '$suffix';
-  }
-}
-
-class _ReviewActions extends StatelessWidget {
-  const _ReviewActions({
-    required this.processing,
-    required this.onApprove,
-    required this.onReject,
-  });
-
-  final bool processing;
-  final VoidCallback onApprove;
-  final VoidCallback onReject;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFFD64545),
-              minimumSize: const Size(0, 52),
-            ),
-            onPressed: processing ? null : onReject,
-            icon: const Icon(Icons.close_rounded),
-            label: const Text('Reject'),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF2E9E5B),
-              minimumSize: const Size(0, 52),
-            ),
-            onPressed: processing ? null : onApprove,
-            icon: processing
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.check_rounded),
-            label: Text(processing ? 'Processing...' : 'Approve'),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _AlreadyReviewed extends StatelessWidget {
-  const _AlreadyReviewed({required this.status});
-
-  final JobStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E5EA)),
-      ),
-      child: Text(
-        'This request has already been reviewed. '
-        'Current status: ${status.value}',
-        textAlign: TextAlign.center,
-      ),
-    );
-  }
 }
 
 class _HeaderCard extends StatelessWidget {
   const _HeaderCard({required this.job});
-
   final Job job;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E5EA)),
-      ),
+    return PremiumCard(
+      color: AppColors.tealPrimary.withValues(alpha: 0.1),
       child: Row(
         children: [
           Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: const Color(0xFFD7E6F7),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.local_shipping_outlined,
-              color: Color(0xFF1E56A0),
-            ),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: AppColors.tealPrimary, borderRadius: BorderRadius.circular(12)),
+            child: const Icon(Icons.description_rounded, color: Colors.white, size: 24),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 16),
           Expanded(
-            child: Text(
-              job.jobCode,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(job.jobCode, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                Text('Status: ${job.status.value.toUpperCase()}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey)),
+              ],
             ),
           ),
           JobStatusChip(status: job.status),
@@ -473,43 +280,8 @@ class _HeaderCard extends StatelessWidget {
   }
 }
 
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.title, required this.child});
-
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E5EA)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 16),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({required this.icon, required this.label, required this.value});
   final IconData icon;
   final String label;
   final String value;
@@ -517,91 +289,19 @@ class _InfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: const Color(0xFF1E56A0)),
+        Icon(icon, size: 20, color: AppColors.tealPrimary),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                label,
-                style: const TextStyle(fontSize: 12, color: Color(0xFF5C6470)),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              Text(label, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.grey)),
+              Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
             ],
           ),
         ),
       ],
-    );
-  }
-}
-
-class _ItemRow extends StatelessWidget {
-  const _ItemRow({required this.item});
-
-  final JobItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Icon(Icons.inventory_2_outlined, color: Color(0xFF1E56A0)),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            item.name,
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-        ),
-        Text(
-          '× ${item.quantity}',
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-      ],
-    );
-  }
-}
-
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline_rounded, size: 52),
-            const SizedBox(height: 12),
-            const Text(
-              'Could not load request',
-              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            Text(message, textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Try Again'),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

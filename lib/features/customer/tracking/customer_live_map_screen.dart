@@ -1,21 +1,56 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../providers/theme_provider.dart';
 import '../../../providers/live_location_provider.dart';
 import '../../../providers/customer_job_providers.dart';
 
-class CustomerLiveMapScreen extends ConsumerWidget {
+class CustomerLiveMapScreen extends ConsumerStatefulWidget {
   const CustomerLiveMapScreen({super.key, required this.assignmentId});
 
   final String assignmentId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final locationAsync = ref.watch(liveLocationProvider(assignmentId));
+  ConsumerState<CustomerLiveMapScreen> createState() => _CustomerLiveMapScreenState();
+}
+
+class _CustomerLiveMapScreenState extends ConsumerState<CustomerLiveMapScreen> {
+  GoogleMapController? _mapController;
+
+  @override
+  void dispose() {
+    _mapController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final locationAsync = ref.watch(liveLocationProvider(widget.assignmentId));
+    final isDark = ref.watch(themeModeProvider) == ThemeMode.dark;
+
+    // Reactively update map style when theme changes
+    ref.listen(themeModeProvider, (previous, next) {
+      if (_mapController != null) {
+        if (next == ThemeMode.dark) {
+          _mapController!.setMapStyle(AppTheme.darkMapStyle);
+        } else {
+          _mapController!.setMapStyle(null);
+        }
+      }
+    });
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Track My Mover'),
+        actions: [
+          IconButton(
+            onPressed: () => ref.read(themeModeProvider.notifier).toggle(),
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: locationAsync.when(
         loading: () => const Center(
@@ -69,6 +104,12 @@ class CustomerLiveMapScreen extends ConsumerWidget {
               GoogleMap(
                 initialCameraPosition: CameraPosition(target: position, zoom: 15),
                 myLocationEnabled: true,
+                onMapCreated: (controller) {
+                  _mapController = controller;
+                  if (isDark) {
+                    _mapController!.setMapStyle(AppTheme.darkMapStyle);
+                  }
+                },
                 markers: {
                   Marker(
                     markerId: const MarkerId('mover'),
@@ -84,7 +125,7 @@ class CustomerLiveMapScreen extends ConsumerWidget {
                 right: 20,
                 child: Consumer(
                   builder: (context, ref, child) {
-                    final assignmentAsync = ref.watch(jobAssignmentProvider(assignmentId));
+                    final assignmentAsync = ref.watch(jobAssignmentProvider(widget.assignmentId));
                     return assignmentAsync.when(
                       loading: () => const SizedBox.shrink(),
                       error: (e, s) => const SizedBox.shrink(),
@@ -95,10 +136,8 @@ class CustomerLiveMapScreen extends ConsumerWidget {
                           loading: () => const SizedBox.shrink(),
                           error: (e, s) => const SizedBox.shrink(),
                           data: (job) {
-                            // Simple distance calculation (Haversine not needed for rough estimate here, but good practice)
-                            // For simplicity, just showing status.
                             return Card(
-                              color: const Color(0xFF1E56A0),
+                              color: AppColors.tealPrimary,
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                                 child: Row(
@@ -126,14 +165,15 @@ class CustomerLiveMapScreen extends ConsumerWidget {
                 right: 20,
                 child: Card(
                   elevation: 4,
+                  color: Theme.of(context).cardTheme.color,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Row(
                       children: [
-                        const CircleAvatar(
-                          backgroundColor: Color(0xFFD7E6F7),
-                          child: Icon(Icons.local_shipping, color: Color(0xFF1E56A0)),
+                        CircleAvatar(
+                          backgroundColor: AppColors.tealPrimary.withOpacity(0.1),
+                          child: const Icon(Icons.local_shipping, color: AppColors.tealPrimary),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -153,8 +193,8 @@ class CustomerLiveMapScreen extends ConsumerWidget {
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.refresh, color: Color(0xFF1E56A0)),
-                          onPressed: () => ref.refresh(liveLocationProvider(assignmentId)),
+                          icon: const Icon(Icons.refresh, color: AppColors.tealPrimary),
+                          onPressed: () => ref.refresh(liveLocationProvider(widget.assignmentId)),
                         )
                       ],
                     ),
@@ -169,7 +209,9 @@ class CustomerLiveMapScreen extends ConsumerWidget {
   }
 
   String _formatTime(DateTime time) {
-    final diff = DateTime.now().difference(time);
+    // Use UTC comparison to avoid local clock drift issues
+    final diff = DateTime.now().toUtc().difference(time.toUtc());
+    if (diff.isNegative) return 'Just now';
     if (diff.inSeconds < 60) return '${diff.inSeconds}s ago';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     return 'more than 1h ago';

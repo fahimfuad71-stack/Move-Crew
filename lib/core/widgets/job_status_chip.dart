@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants/status_enums.dart';
+import '../theme/app_colors.dart';
 
 class JobStatusChip extends StatelessWidget {
   const JobStatusChip({super.key, required this.status});
@@ -8,16 +9,16 @@ class JobStatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (status) {
-      JobStatus.requested => Colors.grey,
-      JobStatus.approved => Colors.green,
-      JobStatus.assigned => Colors.blue,
+      JobStatus.requested => AppColors.stormyLight,
+      JobStatus.approved => AppColors.tealPrimary,
+      JobStatus.assigned => AppColors.skyBlue,
       JobStatus.inProgress => Colors.orange,
-      JobStatus.completed => Colors.teal,
-      JobStatus.rejected || JobStatus.cancelled => Colors.red,
+      JobStatus.completed => AppColors.mintAccent,
+      JobStatus.rejected || JobStatus.cancelled => AppColors.crimsonRed,
     };
 
     return StatusChip(
-      text: status.value,
+      text: status.value.toUpperCase(),
       color: color,
     );
   }
@@ -30,13 +31,13 @@ class AssignmentStatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (status) {
-      AssignmentStatus.pending => Colors.blue,
-      AssignmentStatus.accepted => Colors.green,
-      AssignmentStatus.rejected => Colors.red,
+      AssignmentStatus.pending => AppColors.skyBlue,
+      AssignmentStatus.accepted => AppColors.mintAccent,
+      AssignmentStatus.rejected => AppColors.crimsonRed,
     };
 
     return StatusChip(
-      text: status.value,
+      text: status.value.toUpperCase(),
       color: color,
     );
   }
@@ -47,9 +48,9 @@ class StatusChip extends StatelessWidget {
     super.key,
     required this.text,
     required this.color,
-    this.fontSize = 11,
-    this.horizontalPadding = 8,
-    this.verticalPadding = 4,
+    this.fontSize = 10,
+    this.horizontalPadding = 10,
+    this.verticalPadding = 6,
   });
 
   final String text;
@@ -63,15 +64,17 @@ class StatusChip extends StatelessWidget {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
       ),
       child: Text(
         text,
         style: TextStyle(
           color: color,
           fontSize: fontSize,
-          fontWeight: FontWeight.bold,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.5,
         ),
       ),
     );

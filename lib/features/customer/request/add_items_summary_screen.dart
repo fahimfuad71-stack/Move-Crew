@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/premium_card.dart';
 import '../../../providers/customer_job_providers.dart';
+import '../../../providers/theme_provider.dart';
 
 class AddItemsSummaryScreen extends ConsumerStatefulWidget {
   const AddItemsSummaryScreen({
@@ -214,26 +217,32 @@ class _AddItemsSummaryScreenState extends ConsumerState<AddItemsSummaryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = ref.watch(themeModeProvider) == ThemeMode.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
         title: const Text(
           'Add Items',
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
+        actions: [
+          IconButton(
+            onPressed: () => ref.read(themeModeProvider.notifier).toggle(),
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
           children: [
-            const Text(
+            Text(
               'Moving Items',
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF1A1E23),
+                color: isDark ? Colors.white : const Color(0xFF1A1E23),
               ),
             ),
             const SizedBox(height: 6),
@@ -275,13 +284,13 @@ class _AddItemsSummaryScreenState extends ConsumerState<AddItemsSummaryScreen> {
       bottomNavigationBar: SafeArea(
         child: Container(
           padding: const EdgeInsets.all(16),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(top: BorderSide(color: Color(0xFFE2E5EA))),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardTheme.color,
+            border: Border(top: BorderSide(color: Theme.of(context).dividerColor)),
           ),
           child: FilledButton.icon(
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF1E56A0),
+              backgroundColor: AppColors.tealPrimary,
               foregroundColor: Colors.white,
               minimumSize: const Size(double.infinity, 52),
             ),
@@ -301,13 +310,8 @@ class _AddItemsSummaryScreenState extends ConsumerState<AddItemsSummaryScreen> {
   }
 
   Widget _buildAddItemCard() {
-    return Container(
+    return PremiumCard(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E5EA)),
-      ),
       child: Column(
         children: [
           TextField(
@@ -349,13 +353,8 @@ class _AddItemsSummaryScreenState extends ConsumerState<AddItemsSummaryScreen> {
   }
 
   Widget _buildEmptyItems() {
-    return Container(
+    return PremiumCard(
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E5EA)),
-      ),
       child: const Column(
         children: [
           Icon(Icons.inventory_2_outlined, size: 42, color: Color(0xFF9AA5B1)),
@@ -372,62 +371,48 @@ class _AddItemsSummaryScreenState extends ConsumerState<AddItemsSummaryScreen> {
   Widget _buildItemCard(int index) {
     final item = _items[index];
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Color(0xFFE2E5EA)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                item.name,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+    return PremiumCard(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              item.name,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
               ),
             ),
+          ),
 
-            IconButton(
-              onPressed: () => _decreaseQuantity(index),
-              icon: const Icon(Icons.remove_circle_outline),
-            ),
+          IconButton(
+            onPressed: () => _decreaseQuantity(index),
+            icon: const Icon(Icons.remove_circle_outline),
+          ),
 
-            Text(
-              '${item.quantity}',
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
+          Text(
+            '${item.quantity}',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
 
-            IconButton(
-              onPressed: () => _increaseQuantity(index),
-              icon: const Icon(Icons.add_circle_outline),
-            ),
+          IconButton(
+            onPressed: () => _increaseQuantity(index),
+            icon: const Icon(Icons.add_circle_outline),
+          ),
 
-            IconButton(
-              tooltip: 'Remove item',
-              onPressed: () => _removeItem(index),
-              icon: const Icon(Icons.delete_outline, color: Color(0xFFD64545)),
-            ),
-          ],
-        ),
+          IconButton(
+            tooltip: 'Remove item',
+            onPressed: () => _removeItem(index),
+            icon: const Icon(Icons.delete_outline, color: Color(0xFFD64545)),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildSummaryCard() {
-    return Container(
+    return PremiumCard(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E5EA)),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

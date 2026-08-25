@@ -2,19 +2,55 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
+import '../../../core/theme/app_theme.dart';
+import '../../../providers/theme_provider.dart';
 import '../../../providers/live_location_provider.dart';
 
-class MoverLiveMapScreen extends ConsumerWidget {
+class MoverLiveMapScreen extends ConsumerStatefulWidget {
   const MoverLiveMapScreen({super.key, required this.assignmentId});
 
   final String assignmentId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final locationAsync = ref.watch(liveLocationProvider(assignmentId));
+  ConsumerState<MoverLiveMapScreen> createState() => _MoverLiveMapScreenState();
+}
+
+class _MoverLiveMapScreenState extends ConsumerState<MoverLiveMapScreen> {
+  GoogleMapController? _mapController;
+
+  @override
+  void dispose() {
+    _mapController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final locationAsync = ref.watch(liveLocationProvider(widget.assignmentId));
+    final isDark = ref.watch(themeModeProvider) == ThemeMode.dark;
+
+    // Reactively update map style when theme changes
+    ref.listen(themeModeProvider, (previous, next) {
+      if (_mapController != null) {
+        if (next == ThemeMode.dark) {
+          _mapController!.setMapStyle(AppTheme.darkMapStyle);
+        } else {
+          _mapController!.setMapStyle(null);
+        }
+      }
+    });
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Live Tracking')),
+      appBar: AppBar(
+        title: const Text('Live Tracking'),
+        actions: [
+          IconButton(
+            onPressed: () => ref.read(themeModeProvider.notifier).toggle(),
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: locationAsync.when(
         loading: () => const Center(
           child: Column(
@@ -66,6 +102,12 @@ class MoverLiveMapScreen extends ConsumerWidget {
             initialCameraPosition: CameraPosition(target: position, zoom: 15),
             myLocationEnabled: true,
             myLocationButtonEnabled: true,
+            onMapCreated: (controller) {
+              _mapController = controller;
+              if (isDark) {
+                _mapController!.setMapStyle(AppTheme.darkMapStyle);
+              }
+            },
             markers: {
               Marker(
                 markerId: const MarkerId('mover'),

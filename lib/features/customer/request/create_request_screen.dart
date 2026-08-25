@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/premium_card.dart';
+import '../../../providers/theme_provider.dart';
 import 'add_items_summary_screen.dart';
 
-class CreateRequestScreen extends StatefulWidget {
+class CreateRequestScreen extends ConsumerStatefulWidget {
   const CreateRequestScreen({super.key});
 
   @override
-  State<CreateRequestScreen> createState() => _CreateRequestScreenState();
+  ConsumerState<CreateRequestScreen> createState() => _CreateRequestScreenState();
 }
 
-class _CreateRequestScreenState extends State<CreateRequestScreen> {
+class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _pickupController = TextEditingController();
@@ -113,59 +117,63 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
   void _showMessage(String message) {
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ).showSnackBar(SnackBar(content: Text(message), backgroundColor: AppColors.crimsonRed));
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = ref.watch(themeModeProvider) == ThemeMode.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-        title: const Text(
-          'Create Request',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
+        title: const Text('New Request', style: TextStyle(fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+            onPressed: () {
+              ref.read(themeModeProvider.notifier).toggle();
+            },
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+          ),
+          const SizedBox(width: 8),
+        ],
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
       body: SafeArea(
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 24),
             children: [
-              const Text(
-                'Move Details',
+              const SizedBox(height: 12),
+              Text(
+                'MOVE DETAILS',
                 style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1A1E23),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: Theme.of(context).hintColor,
+                  letterSpacing: 1.5,
                 ),
               ),
-              const SizedBox(height: 6),
-              const Text(
-                'Tell us where and when you are moving.',
-                style: TextStyle(fontSize: 14, color: Color(0xFF5C6470)),
+              const SizedBox(height: 8),
+              Text(
+                'Let\'s plan your move.',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
 
               TextFormField(
                 controller: _pickupController,
                 textInputAction: TextInputAction.next,
+                style: TextStyle(fontWeight: FontWeight.w600),
                 decoration: _inputDecoration(
                   label: 'Pickup Address',
-                  hint: 'Enter pickup address',
-                  icon: Icons.trip_origin,
+                  hint: 'Street, City, Zip',
+                  icon: Icons.trip_origin_rounded,
                 ),
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Pickup address is required.';
-                  }
-
-                  if (value.trim().length < 5) {
-                    return 'Enter a valid pickup address.';
-                  }
-
+                  if (value == null || value.trim().isEmpty) return 'Required';
+                  if (value.trim().length < 5) return 'Too short';
                   return null;
                 },
               ),
@@ -175,44 +183,41 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
               TextFormField(
                 controller: _destinationController,
                 textInputAction: TextInputAction.next,
+                style: TextStyle(fontWeight: FontWeight.w600),
                 decoration: _inputDecoration(
                   label: 'Destination Address',
-                  hint: 'Enter destination address',
-                  icon: Icons.location_on_outlined,
+                  hint: 'Street, City, Zip',
+                  icon: Icons.location_on_rounded,
                 ),
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Destination address is required.';
-                  }
-
-                  if (value.trim().length < 5) {
-                    return 'Enter a valid destination address.';
-                  }
-
+                  if (value == null || value.trim().isEmpty) return 'Required';
+                  if (value.trim().length < 5) return 'Too short';
                   return null;
                 },
               ),
 
               const SizedBox(height: 16),
 
-              _SelectionCard(
-                label: 'Move Date',
-                value: _moveDate == null
-                    ? 'Select date'
-                    : _formatDate(_moveDate!),
-                icon: Icons.calendar_today_outlined,
-                onTap: _selectDate,
-              ),
-
-              const SizedBox(height: 16),
-
-              _SelectionCard(
-                label: 'Start Time',
-                value: _startTime == null
-                    ? 'Select time'
-                    : _startTime!.format(context),
-                icon: Icons.access_time_rounded,
-                onTap: _selectTime,
+              Row(
+                children: [
+                  Expanded(
+                    child: _SelectionItem(
+                      label: 'DATE',
+                      value: _moveDate == null ? 'Select' : _formatDate(_moveDate!),
+                      icon: Icons.calendar_today_rounded,
+                      onTap: _selectDate,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _SelectionItem(
+                      label: 'TIME',
+                      value: _startTime == null ? 'Select' : _startTime!.format(context),
+                      icon: Icons.access_time_rounded,
+                      onTap: _selectTime,
+                    ),
+                  ),
+                ],
               ),
 
               const SizedBox(height: 16),
@@ -220,35 +225,26 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
               TextFormField(
                 controller: _instructionsController,
                 minLines: 3,
-                maxLines: 5,
+                maxLines: 4,
                 maxLength: 500,
                 decoration: _inputDecoration(
-                  label: 'Instructions (Optional)',
-                  hint: 'Parking, elevator, access instructions, etc.',
+                  label: 'Special Instructions',
+                  hint: 'Elevator access, narrow stairs, etc.',
                   icon: Icons.notes_rounded,
                 ),
               ),
 
-              const SizedBox(height: 8),
+              const SizedBox(height: 32),
 
-              FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF1E56A0),
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 52),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
+              ElevatedButton(
                 onPressed: _continue,
-                icon: const Icon(Icons.arrow_forward_rounded),
-                label: const Text(
-                  'Continue to Items',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 60),
                 ),
+                child: const Text('CONTINUE TO ITEMS'),
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 40),
             ],
           ),
         ),
@@ -264,44 +260,18 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      prefixIcon: Icon(icon),
-      filled: true,
-      fillColor: Colors.white,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFFE2E5EA)),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFFE2E5EA)),
-      ),
+      prefixIcon: Icon(icon, color: AppColors.tealPrimary),
+      contentPadding: const EdgeInsets.all(20),
     );
   }
 
   String _formatDate(DateTime date) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-
-    return '${date.day} '
-        '${months[date.month - 1]} '
-        '${date.year}';
+    return '${date.day}/${date.month}/${date.year}';
   }
 }
 
-class _SelectionCard extends StatelessWidget {
-  const _SelectionCard({
+class _SelectionItem extends StatelessWidget {
+  const _SelectionItem({
     required this.label,
     required this.value,
     required this.icon,
@@ -315,46 +285,24 @@ class _SelectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return PremiumCard(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFFE2E5EA)),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: const Color(0xFF1E56A0)),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF5C6470),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF1A1E23),
-                    ),
-                  ),
-                ],
-              ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Icon(icon, color: AppColors.tealPrimary, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Theme.of(context).hintColor)),
+                const SizedBox(height: 2),
+                Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+              ],
             ),
-            const Icon(Icons.chevron_right_rounded, color: Color(0xFF9AA5B1)),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

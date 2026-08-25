@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/constants/status_enums.dart';
 import '../data/models/job.dart';
 import '../data/models/job_item.dart';
 import '../data/models/user.dart';
@@ -61,4 +62,23 @@ final adminMoverTimeLogsProvider = FutureProvider.autoDispose.family<List<Map<St
 
 final adminCustomerHistoryProvider = FutureProvider.autoDispose.family<List<Job>, String>((ref, customerId) {
   return ref.watch(adminJobRepositoryProvider).getCustomerJobHistory(customerId);
+});
+
+final adminAssignedDashboardJobsProvider = FutureProvider.autoDispose<List<Job>>((ref) async {
+  final repo = ref.watch(adminJobRepositoryProvider);
+  final assigned = await repo.getAllJobs(status: JobStatus.assigned);
+  final inProgress = await repo.getAllJobs(status: JobStatus.inProgress);
+  return [...assigned, ...inProgress];
+});
+
+final adminRejectedJobsCountProvider = FutureProvider.autoDispose<int>((ref) async {
+  final supabase = ref.watch(supabaseClientProvider);
+  final response = await supabase
+      .from('assignments')
+      .select('job_id, jobs!inner(status)')
+      .eq('status', 'REJECTED')
+      .inFilter('jobs.status', ['ASSIGNED', 'IN_PROGRESS']);
+  
+  final jobIds = (response as List).map((row) => row['job_id'] as String).toSet();
+  return jobIds.length;
 });

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/premium_card.dart';
 import '../../../providers/admin_job_providers.dart';
+import '../../../providers/theme_provider.dart';
 import 'admin_customer_detail_screen.dart';
 
 class AdminCustomerListScreen extends ConsumerWidget {
@@ -9,13 +12,22 @@ class AdminCustomerListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final customersAsync = ref.watch(adminAllCustomersProvider);
+    final isDark = ref.watch(themeModeProvider) == ThemeMode.dark;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-        title: const Text('Customer Management'),
+        title: const Text('Customer Management', style: TextStyle(fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+            onPressed: () {
+              ref.read(themeModeProvider.notifier).toggle();
+            },
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+          ),
+          const SizedBox(width: 8),
+        ],
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
       body: customersAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -23,29 +35,38 @@ class AdminCustomerListScreen extends ConsumerWidget {
         data: (customers) {
           if (customers.isEmpty) return const Center(child: Text('No customers found.'));
 
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
+          return ListView.builder(
+            padding: const EdgeInsets.all(20),
             itemCount: customers.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               final customer = customers[index];
-              return Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Color(0xFFE2E5EA))),
-                child: ListTile(
-                  leading: const CircleAvatar(
-                    backgroundColor: Color(0xFFFFEBEE),
-                    child: Icon(Icons.person_outline, color: Colors.redAccent),
-                  ),
-                  title: Text(customer.fullName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text(customer.phone ?? 'No phone'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => AdminCustomerDetailScreen(customer: customer)),
-                    );
-                  },
+              return PremiumCard(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => AdminCustomerDetailScreen(customer: customer)),
+                  );
+                },
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 25,
+                      backgroundColor: AppColors.crimsonRed.withValues(alpha: 0.1),
+                      child: const Icon(Icons.person_rounded, color: AppColors.crimsonRed),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(customer.fullName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          const SizedBox(height: 4),
+                          Text(customer.phone ?? 'No phone', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.grey),
+                  ],
                 ),
               );
             },
